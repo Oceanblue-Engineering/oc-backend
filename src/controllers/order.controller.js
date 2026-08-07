@@ -5,6 +5,7 @@ import LocationProfile from "../models/locationProfile.model.js";
 import Inventory from "../models/inventory.model.js";
 import CreditPerson from "../models/creditPersona.model.js";
 import CreditRecord from "../models/creditRecord.model.js";
+import Township from "../models/township.model.js";
 import { asyncErrorHandler } from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
 import { createDateFilter } from "../utils/dateFilter.utils.js";
@@ -24,6 +25,7 @@ export const createOrder = asyncErrorHandler(async (req, res, next) => {
     creditPersonId,
     orderDate,
     note,
+    deliveryDetails,
   } = req.body;
   const soldBy = req.user._id;
 
@@ -263,11 +265,43 @@ export const createOrder = asyncErrorHandler(async (req, res, next) => {
               ? subTotal
               : calculatedSubTotal;
 
-          // Calculate finalAmount if not provided
+          // Resolve delivery details (township-based fee, authoritative from DB)
+          let delivery = {
+            township: null,
+            townshipName: "",
+            deliveryFee: 0,
+            recipientName: "",
+            recipientPhone: "",
+            deliveryAddress: "",
+          };
+          let deliveryStatus = "pending";
+
+          if (deliveryDetails && deliveryDetails.township) {
+            if (!mongoose.Types.ObjectId.isValid(deliveryDetails.township)) {
+              throw new CustomError(400, "Invalid township ID format");
+            }
+            const township = await Township.findOne({
+              _id: deliveryDetails.township,
+              isDeleted: false,
+            }).session(session);
+
+            if (!township || !township.isActive) {
+              throw new CustomError(404, "Township not found or inactive");
+            }
+
+            delivery.township = township._id;
+            delivery.townshipName = township.name;
+            delivery.deliveryFee = township.deliveryFee || 0;
+            delivery.recipientName = deliveryDetails.recipientName || "";
+            delivery.recipientPhone = deliveryDetails.recipientPhone || "";
+            delivery.deliveryAddress = deliveryDetails.deliveryAddress || "";
+          }
+
+          // Calculate finalAmount — delivery fee added (authoritative from DB)
           const calculatedFinalAmount =
             finalAmount !== undefined && finalAmount !== null
-              ? finalAmount
-              : finalSubTotal + tax - discount;
+              ? finalSubTotal + delivery.deliveryFee - discount
+              : finalSubTotal + delivery.deliveryFee + tax - discount;
 
           if (calculatedFinalAmount < 0) {
             throw new CustomError(400, "Final amount cannot be negative");
@@ -339,6 +373,8 @@ export const createOrder = asyncErrorHandler(async (req, res, next) => {
             orderStatus: "completed",
             soldBy,
             note: note || "",
+            deliveryDetails: delivery,
+            deliveryStatus,
           };
 
           if (orderDate) {
@@ -467,7 +503,7 @@ export const getAllOrders = asyncErrorHandler(async (req, res, next) => {
   };
 
   // Extract query parameters
-  const { paymentType, paymentMethod } = req.query;
+  const { paymentType, paymentMethod, deliveryStatus, township } = req.query;
 
   // Add paymentType filter if provided
   if (paymentType !== undefined && paymentType !== "") {
@@ -490,6 +526,16 @@ export const getAllOrders = asyncErrorHandler(async (req, res, next) => {
     // Common payment methods: cash, card, bank_transfer, mobile_payment, etc.
     // Since the model doesn't enforce enum, we'll accept any string but trim it
     filter.paymentMethod = paymentMethod.trim();
+  }
+
+  // Add deliveryStatus filter if provided
+  if (deliveryStatus !== undefined && deliveryStatus !== "") {
+    filter.deliveryStatus = deliveryStatus;
+  }
+
+  // Add township filter if provided (matches by townshipName)
+  if (township !== undefined && township !== "") {
+    filter["deliveryDetails.townshipName"] = township;
   }
 
   // Add date range filter using dateFilter utility
@@ -1369,3 +1415,47 @@ export const hardDeleteOrder = asyncErrorHandler(async (req, res, next) => {
     data: deletedOrder,
   });
 });
+
+// Update order delivery status
+export const updateOrderDeliveryStatus = asyncErrorHandler(
+  async (req, res, next) => {
+    const { orderId } = req.params;
+    const { deliveryStatus } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return next(new CustomError(400, "Invalid order ID format"));
+    }
+
+    const validStatuses = [
+      "pending",
+      "processing",
+      "out_for_delivery",
+      "delivered",
+      "cancelled",
+    ];
+    if (!deliveryStatus || !validStatuses.includes(deliveryStatus)) {
+      return next(
+        new CustomError(
+          400,
+          `Invalid delivery status. Allowed values: ${validStatuses.join(", ")}`,
+        ),
+      );
+    }
+
+    const order = await Order.findOneAndUpdate(
+      { _id: orderId, isDeleted: false },
+      { deliveryStatus },
+      { new: true, runValidators: true },
+    );
+
+    if (!order) {
+      return next(new CustomError(404, "Order not found"));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Delivery status updated successfully",
+      data: { order },
+    });
+  },
+);

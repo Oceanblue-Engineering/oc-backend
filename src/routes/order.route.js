@@ -9,6 +9,7 @@ import {
   addOrderItems,
   removeOrderItems,
   hardDeleteOrder,
+  updateOrderDeliveryStatus,
 } from "../controllers/order.controller.js";
 
 const router = express.Router();
@@ -55,6 +56,14 @@ router.patch(
   protect,
   permissionGranted("owner"),
   updateOrderPaidAmount
+);
+
+// Update order delivery status
+router.patch(
+  "/order/:orderId/delivery-status",
+  protect,
+  permissionGranted("owner", "admin"),
+  updateOrderDeliveryStatus
 );
 
 // Add order items to existing order

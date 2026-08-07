@@ -112,6 +112,54 @@ const orderSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, "Note cannot exceed 500 characters"],
     },
+    // ── Delivery Management ─────────────────────────
+    deliveryDetails: {
+      township: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Township",
+        default: null,
+      },
+      townshipName: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      deliveryFee: {
+        type: Number,
+        default: 0,
+        min: [0, "Delivery fee cannot be negative"],
+      },
+      recipientName: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      recipientPhone: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      deliveryAddress: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+    },
+    deliveryStatus: {
+      type: String,
+      enum: {
+        values: [
+          "pending",
+          "processing",
+          "out_for_delivery",
+          "delivered",
+          "cancelled",
+        ],
+        message:
+          "Delivery status must be pending, processing, out_for_delivery, delivered, or cancelled",
+      },
+      default: "pending",
+    },
   },
   {
     timestamps: true,
