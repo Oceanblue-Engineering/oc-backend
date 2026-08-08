@@ -2,6 +2,7 @@ import Db from "./configs/db.config.js";
 import process from "node:process";
 import app from "./app.js";
 import { startDailyReportCron } from "./services/dailyReportCron.service.js";
+import { initBot } from "./services/telegram.service.js";
 process.on("uncaughtException", (err) => {
   console.log("Inside uncaughtException handler");
   console.log(err.name, err.message);
@@ -18,6 +19,7 @@ app.listen(port, () => {
   startDailyReportCron().catch((err) => {
     console.error("[DailyReportCron] Failed to start:", err.message);
   });
+  initBot();
 });
 
 process.on("unhandledRejection", (err) => {

@@ -39,6 +39,9 @@ import luckyDrawRouter from "./routes/luckyDraw.route.js";
 import clientRouter from "./routes/client.route.js";
 import townshipRouter from "./routes/township.route.js";
 import deliveryAnalyticsRouter from "./routes/deliveryAnalytics.route.js";
+import ticketRouter from "./routes/ticket.route.js";
+import departmentRouter from "./routes/department.route.js";
+import { getTelegramBot } from "./services/telegram.service.js";
 const app = express();
 app.use(
   helmet({
@@ -82,6 +85,17 @@ app.use("/api/v1", luckyDrawRouter);
 app.use("/api/v1", clientRouter);
 app.use("/api/v1", townshipRouter);
 app.use("/api/v1", deliveryAnalyticsRouter);
+app.use("/api/v1", ticketRouter);
+app.use("/api/v1", departmentRouter);
+// Telegram webhook (public)
+app.post("/webhook/telegram", (req, res) => {
+  const bot = getTelegramBot();
+  if (!bot) {
+    return res.status(200).json({ ok: true });
+  }
+  bot.processUpdate(req.body);
+  res.status(200).json({ ok: true });
+});
 //404-Error Handler
 app.all("/*any", (req, res, next) => {
   const err = new CustomError(

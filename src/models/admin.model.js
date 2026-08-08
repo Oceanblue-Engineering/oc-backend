@@ -27,6 +27,12 @@ const adminSchema = new mongoose.Schema({
     enum: ["owner", "admin", "cashier"],
     required: [true, "Role is required"],
   },
+  telegramChatId: {
+    type: String,
+    sparse: true,
+    unique: true,
+    default: null,
+  },
   locationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "LocationProfile",
