@@ -29,9 +29,7 @@ const adminSchema = new mongoose.Schema({
   },
   telegramChatId: {
     type: String,
-    sparse: true,
-    unique: true,
-    default: null,
+    trim: true,
   },
   locationId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -60,6 +58,17 @@ const adminSchema = new mongoose.Schema({
     default: null,
   },
 });
+
+// Enforce uniqueness on telegramChatId only for real string values.
+// null / absent chat ids are ignored so multiple accounts can stay unlinked.
+adminSchema.index(
+  { telegramChatId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { telegramChatId: { $type: "string" } },
+    name: "telegramChatId_partial_unique",
+  }
+);
 
 adminSchema.pre("save", async function () {
   if (this.isModified("password")) {

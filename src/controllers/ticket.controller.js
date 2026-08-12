@@ -15,12 +15,12 @@ import {
 
 // GET /tickets — list with filters
 export const getTickets = asyncErrorHandler(async (req, res, next) => {
-  const { search, status, priority, department_id, assigned_to, page = 1, limit = 20 } = req.query;
+  const { search, status, priority, assigned_to, type, page = 1, limit = 20 } = req.query;
 
   const filter = { isDeleted: false };
   if (status) filter.status = status;
+  if (type) filter.type = type;
   if (priority) filter.priority = priority;
-  if (department_id) filter.department_id = department_id;
   if (assigned_to) filter.assigned_to = assigned_to;
   if (search) {
     const regex = { $regex: search, $options: "i" };
@@ -32,7 +32,6 @@ export const getTickets = asyncErrorHandler(async (req, res, next) => {
     Ticket.find(filter)
       .populate("assigned_to", "name")
       .populate("created_by", "name")
-      .populate("department_id", "name")
       .skip(skip)
       .limit(Number(limit))
       .sort({ createdAt: -1 }),
@@ -54,7 +53,7 @@ export const getTickets = asyncErrorHandler(async (req, res, next) => {
 
 // POST /tickets — create
 export const createTicket = asyncErrorHandler(async (req, res, next) => {
-  const { title, description, priority, department_id } = req.body;
+  const { title, description, priority, type, project_details } = req.body;
   if (!title || !description) {
     return next(new CustomError(400, "Title and description are required"));
   }
@@ -63,9 +62,10 @@ export const createTicket = asyncErrorHandler(async (req, res, next) => {
     title,
     description,
     priority: priority || "Medium",
-    department_id: department_id || null,
     created_by: req.user._id,
     status: "Open",
+    type: type || "Retail Sale",
+    ...(type === "Project" && project_details ? { project_details } : {}),
   });
 
   await recordTicketHistory(ticket._id, req.user._id, "Created ticket");
@@ -86,8 +86,7 @@ export const getTicketById = asyncErrorHandler(async (req, res, next) => {
 
   const ticket = await Ticket.findOne({ _id: id, isDeleted: false })
     .populate("assigned_to", "name")
-    .populate("created_by", "name")
-    .populate("department_id", "name");
+    .populate("created_by", "name");
 
   if (!ticket) return next(new CustomError(404, "Ticket not found"));
 

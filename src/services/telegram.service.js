@@ -2,7 +2,6 @@ import TelegramBot from "node-telegram-bot-api";
 import Ticket from "../models/ticket.model.js";
 import TicketComment from "../models/ticketComment.model.js";
 import Admin from "../models/admin.model.js";
-import Department from "../models/department.model.js";
 import { recordTicketHistory } from "./ticket.service.js";
 
 let bot = null;
@@ -67,8 +66,7 @@ export const notifyTicketAssigned = async (ticketId) => {
   if (!bot) return;
   const ticket = await Ticket.findById(ticketId)
     .populate("assigned_to", "name telegramChatId")
-    .populate("created_by", "name")
-    .populate("department_id", "name");
+    .populate("created_by", "name");
 
   const assignee = ticket?.assigned_to;
   if (!assignee?.telegramChatId) return;
@@ -77,7 +75,6 @@ export const notifyTicketAssigned = async (ticketId) => {
     `*🎫 New Ticket Assigned*  \n\n` +
     `*Title:* ${ticket.title}  \n` +
     `*Priority:* ${ticket.priority}  \n` +
-    `*Department:* ${ticket.department_id?.name || "—"}  \n` +
     `*Created by:* ${ticket.created_by?.name || "—"}  \n\n` +
     `_${ticket.description}_`;
 

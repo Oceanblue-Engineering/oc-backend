@@ -5,7 +5,8 @@ import { signToken } from "../services/jwtToken.service.js";
 import mongoose from "mongoose";
 
 export const signup = asyncErrorHandler(async (req, res, next) => {
-  const { name, password, confirmPassword, role, locationId } = req.body;
+  const { name, password, confirmPassword, role, locationId, telegramChatId } =
+    req.body;
 
   if (!name || !password || !confirmPassword) {
     return next(new CustomError(400, "Missing required fields for signup."));
@@ -15,12 +16,17 @@ export const signup = asyncErrorHandler(async (req, res, next) => {
     return next(new CustomError(400, "Passwords do not match."));
   }
 
+  // Only store a Telegram chat id when a real value is provided; an empty
+  // value must stay absent to avoid the partial unique-index collision.
+  const telegramId = telegramChatId?.toString().trim();
+
   const admin = await Admin.create({
     name,
     password,
     confirmPassword,
     role,
     locationId,
+    ...(telegramId ? { telegramChatId: telegramId } : {}),
   });
 
   res.status(200).json({
@@ -247,7 +253,7 @@ export const getAccountById = asyncErrorHandler(async (req, res, next) => {
 
 export const updateUser = asyncErrorHandler(async (req, res, next) => {
   const { accountId } = req.params;
-  const { name, role, locationId } = req.body;
+  const { name, role, locationId, telegramChatId } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(accountId)) {
     return next(new CustomError(400, "Invalid user ID format."));
@@ -264,13 +270,30 @@ export const updateUser = asyncErrorHandler(async (req, res, next) => {
     updateFields.locationId = locationId;
   }
 
+  // Telegram chat id: a real value sets the link, an empty value clears it
+  // via $unset (never store "" — it would collide on the unique index).
+  const unsetFields = {};
+  if (telegramChatId !== undefined) {
+    const telegramId = telegramChatId?.toString().trim();
+    if (telegramId) {
+      updateFields.telegramChatId = telegramId;
+    } else {
+      unsetFields.telegramChatId = 1;
+    }
+  }
+
   if (updateFields.softDeleted) {
     return next(new CustomError(401, "User is deleted."));
   }
 
+  const updateQuery = { $set: updateFields };
+  if (Object.keys(unsetFields).length > 0) {
+    updateQuery.$unset = unsetFields;
+  }
+
   const updatedUser = await Admin.findByIdAndUpdate(
     accountId,
-    { $set: updateFields },
+    updateQuery,
     { new: true, runValidators: true }
   ).populate("locationId", "type locationName locationCode locationAddress");
 

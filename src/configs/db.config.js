@@ -38,6 +38,39 @@ export const Db = async () => {
         );
       }
     }
+
+    // Drop legacy unique index on telegramChatId for Admin model (one-time migration)
+    // The field is now guarded by a partial unique index (string values only),
+    // so the old sparse/unique index must be removed to avoid null-collision.
+    try {
+      const adminCollection = mongoose.connection.db.collection("admins");
+      const adminIndexes = await adminCollection.indexes();
+
+      // Legacy index: unique on telegramChatId WITHOUT a partialFilterExpression
+      const legacyTelegramIndex = adminIndexes.find(
+        (index) =>
+          index.key &&
+          index.key.telegramChatId === 1 &&
+          index.unique === true &&
+          !index.partialFilterExpression
+      );
+
+      if (legacyTelegramIndex) {
+        await adminCollection.dropIndex(legacyTelegramIndex.name);
+        console.log(
+          `✓ Dropped legacy unique index on telegramChatId: ${legacyTelegramIndex.name}`
+        );
+      }
+    } catch (indexError) {
+      if (indexError.code === 27 || indexError.codeName === "IndexNotFound") {
+        // Index doesn't exist, which is expected after first run
+      } else {
+        console.log(
+          "Note: Could not drop telegramChatId unique index:",
+          indexError.message
+        );
+      }
+    }
   } catch (error) {
     console.log("Database connection failed:", error.message);
     process.exit(1);
