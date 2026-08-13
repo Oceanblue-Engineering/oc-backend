@@ -29,6 +29,11 @@ const expenseSchema = new mongoose.Schema(
       ref: "Admin",
       required: [true, "Admin is required"],
     },
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      default: null,
+    },
     softDeleted: {
       type: Boolean,
       default: false,

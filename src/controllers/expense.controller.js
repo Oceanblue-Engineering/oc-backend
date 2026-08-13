@@ -11,6 +11,7 @@ export const createExpense = asyncErrorHandler(async (req, res, next) => {
     date,
     notes,
     locationId: bodyLocationId,
+    projectId,
   } = req.body;
 
   // Use locationId from user if available, otherwise use from request body
@@ -34,6 +35,9 @@ export const createExpense = asyncErrorHandler(async (req, res, next) => {
   if (!mongoose.Types.ObjectId.isValid(adminId)) {
     return next(new CustomError(400, "Invalid admin ID format"));
   }
+  if (projectId && !mongoose.Types.ObjectId.isValid(projectId)) {
+    return next(new CustomError(400, "Invalid project ID format"));
+  }
   const expense = await Expense.create({
     category,
     amount,
@@ -41,6 +45,7 @@ export const createExpense = asyncErrorHandler(async (req, res, next) => {
     notes,
     locationId,
     adminId,
+    projectId: projectId || null,
   });
   res.status(201).json({
     success: true,
@@ -62,6 +67,10 @@ export const getExpenseById = asyncErrorHandler(async (req, res, next) => {
     .populate({
       path: "adminId",
       select: "name role",
+    })
+    .populate({
+      path: "projectId",
+      select: "siteName",
     });
   if (!expense) {
     return next(new CustomError(404, "Expense not found"));
@@ -84,6 +93,7 @@ export const getExpenses = asyncErrorHandler(async (req, res, next) => {
     sortOrder = "desc",
     category,
     locationId,
+    projectId,
   } = req.query;
 
   // Filter by softDeleted status if provided
@@ -115,6 +125,14 @@ export const getExpenses = asyncErrorHandler(async (req, res, next) => {
       return next(new CustomError(400, "Invalid location ID format"));
     }
     filter.locationId = locationId;
+  }
+
+  // Filter by projectId if provided
+  if (projectId) {
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return next(new CustomError(400, "Invalid project ID format"));
+    }
+    filter.projectId = projectId;
   }
 
   // Add date range filter using dateFilter utility
@@ -153,6 +171,10 @@ export const getExpenses = asyncErrorHandler(async (req, res, next) => {
     .populate({
       path: "adminId",
       select: "name role",
+    })
+    .populate({
+      path: "projectId",
+      select: "siteName",
     });
 
   // Get total count for pagination info
@@ -180,7 +202,7 @@ export const getExpenses = asyncErrorHandler(async (req, res, next) => {
 
 export const updateExpense = asyncErrorHandler(async (req, res, next) => {
   const { id } = req.params;
-  const { category, amount, date, notes } = req.body;
+  const { category, amount, date, notes, projectId } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return next(new CustomError(400, "Invalid expense ID format"));
@@ -191,10 +213,13 @@ export const updateExpense = asyncErrorHandler(async (req, res, next) => {
   if (!mongoose.Types.ObjectId.isValid(adminId)) {
     return next(new CustomError(400, "Invalid admin ID format"));
   }
+  if (projectId && !mongoose.Types.ObjectId.isValid(projectId)) {
+    return next(new CustomError(400, "Invalid project ID format"));
+  }
 
   const expense = await Expense.findByIdAndUpdate(
     id,
-    { category, amount, date, notes, adminId },
+    { category, amount, date, notes, adminId, projectId: projectId || null },
     { new: true, runValidators: true },
   )
     .populate({
@@ -204,6 +229,10 @@ export const updateExpense = asyncErrorHandler(async (req, res, next) => {
     .populate({
       path: "adminId",
       select: "name role",
+    })
+    .populate({
+      path: "projectId",
+      select: "siteName",
     });
 
   if (!expense) {
