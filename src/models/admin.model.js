@@ -24,12 +24,21 @@ const adminSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["owner", "admin", "cashier"],
+    enum: ["owner", "admin", "cashier", "worker"],
     required: [true, "Role is required"],
   },
   telegramChatId: {
     type: String,
     trim: true,
+  },
+  position: {
+    type: String,
+    enum: ["T1", "T2", "T3"],
+    trim: true,
+  },
+  dailyRate: {
+    type: Number,
+    default: 0,
   },
   locationId: {
     type: mongoose.Schema.Types.ObjectId,

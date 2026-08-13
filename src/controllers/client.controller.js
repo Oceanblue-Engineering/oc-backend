@@ -18,18 +18,14 @@ export const createClient = asyncErrorHandler(async (req, res, next) => {
     companyName,
     businessName,
     industry,
-    sourceChannel,
-    currentProblems,
-    desiredOutcome,
-    inquiryDate,
-    leadType = "sales",
+    projectId,
+    projectStartDate,
+    projectDeliveryDate,
+    deliverablesSummary,
   } = req.body;
 
   if (!name) {
     return next(new CustomError(400, "Name is required"));
-  }
-  if (!["sales", "service"].includes(leadType)) {
-    return next(new CustomError(400, "leadType must be sales or service"));
   }
 
   const client = await Client.create({
@@ -40,26 +36,24 @@ export const createClient = asyncErrorHandler(async (req, res, next) => {
     companyName,
     businessName,
     industry,
-    sourceChannel,
-    currentProblems,
-    desiredOutcome,
-    inquiryDate,
-    leadType,
-    status: leadType === "service" ? "Service Inquiry" : "Sale Inquiry",
-    isPostSale: false,
+    projectId,
+    projectStartDate,
+    projectDeliveryDate,
+    deliverablesSummary,
+    status: "Signed",
   });
 
   // Audit: CREATE
   await createAudit({
     entityId: client._id,
     action: "CREATE",
-    details: { name, sourceChannel },
+    details: { name },
     user: req.user?.name || "system",
   });
 
   res.status(201).json({
     success: true,
-    message: "Client inquiry created successfully",
+    message: "Client project created successfully",
     data: { client },
   });
 });
@@ -67,9 +61,7 @@ export const createClient = asyncErrorHandler(async (req, res, next) => {
 // READ ALL — with isPostSale / status / search filters + pagination
 export const getClients = asyncErrorHandler(async (req, res, next) => {
   const {
-    isPostSale,
     status,
-    leadType,
     search,
     page = 1,
     limit = 20,
@@ -77,14 +69,8 @@ export const getClients = asyncErrorHandler(async (req, res, next) => {
 
   const filter = { isDeleted: false };
 
-  if (isPostSale !== undefined) {
-    filter.isPostSale = isPostSale === "true";
-  }
   if (status) {
     filter.status = status;
-  }
-  if (leadType) {
-    filter.leadType = leadType;
   }
   if (search) {
     const regex = { $regex: search, $options: "i" };

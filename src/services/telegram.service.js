@@ -2,6 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import Ticket from "../models/ticket.model.js";
 import TicketComment from "../models/ticketComment.model.js";
 import Admin from "../models/admin.model.js";
+import Worker from "../models/worker.model.js";
 import { recordTicketHistory } from "./ticket.service.js";
 
 let bot = null;
@@ -65,11 +66,14 @@ const buildStatusButtons = (ticketId, currentStatus) => [
 export const notifyTicketAssigned = async (ticketId) => {
   if (!bot) return;
   const ticket = await Ticket.findById(ticketId)
-    .populate("assigned_to", "name telegramChatId")
+    .populate("assigned_to", "name telegramChatId telegramId")
     .populate("created_by", "name");
 
   const assignee = ticket?.assigned_to;
-  if (!assignee?.telegramChatId) return;
+  const chatId = assignee?.telegramChatId || assignee?.telegramId;
+  console.log("[Telegram Debug] Assignee:", assignee);
+  console.log("[Telegram Debug] Resolved Chat ID:", chatId);
+  if (!chatId) return;
 
   const msg =
     `*🎫 New Ticket Assigned*  \n\n` +
@@ -79,7 +83,7 @@ export const notifyTicketAssigned = async (ticketId) => {
     `_${ticket.description}_`;
 
   try {
-    await bot.sendMessage(assignee.telegramChatId, msg, {
+    await bot.sendMessage(chatId, msg, {
       parse_mode: "Markdown",
       reply_markup: { inline_keyboard: buildStatusButtons(ticketId, ticket.status) },
     });
@@ -94,7 +98,7 @@ export const notifyTicketAssigned = async (ticketId) => {
 export const notifyTicketComment = async ({ ticketId, commenterUserId }) => {
   if (!bot) return;
   const ticket = await Ticket.findById(ticketId)
-    .populate("assigned_to", "telegramChatId name")
+    .populate("assigned_to", "telegramChatId telegramId name")
     .populate("created_by", "telegramChatId name");
   if (!ticket) return;
 
@@ -106,11 +110,12 @@ export const notifyTicketComment = async ({ ticketId, commenterUserId }) => {
       : ticket.created_by;
   const otherName = commenter === "creator" ? ticket.created_by?.name : ticket.assigned_to?.name;
 
-  if (!recipient?.telegramChatId) return;
+  const recipientChatId = recipient?.telegramChatId || recipient?.telegramId;
+  if (!recipientChatId) return;
 
   try {
     await bot.sendMessage(
-      recipient.telegramChatId,
+      recipientChatId,
       `*💬 New comment on #${ticketId}* by ${otherName || "User"}:\n\n_Check the ticket._`,
       { parse_mode: "Markdown", reply_markup: { inline_keyboard: buildStatusButtons(ticketId, ticket.status) } }
     );
@@ -188,11 +193,14 @@ async function handleReplyMessage(msg) {
   const ticketId = match ? match[1] : null;
   if (!ticketId) return;
 
-  // Find admin by telegram chat id
-  const admin = await Admin.findOne({ telegramChatId: String(msg.chat.id) });
-  if (!admin) return;
+  // Find admin/worker by telegram chat id
+  let user = await Admin.findOne({ telegramChatId: String(msg.chat.id) });
+  if (!user) {
+    user = await Worker.findOne({ telegramId: String(msg.chat.id) });
+  }
+  if (!user) return;
 
-  const user_id = admin._id;
+  const user_id = user._id;
   await TicketComment.create({ ticket_id: ticketId, user_id, message: msg.text });
   await recordTicketHistory(ticketId, user_id, "Added a comment");
   await notifyTicketComment({ ticketId, commenterUserId: String(user_id) });

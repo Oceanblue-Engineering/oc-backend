@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Ticket from "../models/ticket.model.js";
 import TicketComment from "../models/ticketComment.model.js";
 import TicketHistory from "../models/ticketHistory.model.js";
+import Worker from "../models/worker.model.js";
 import { asyncErrorHandler } from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
 import {
@@ -53,7 +54,8 @@ export const getTickets = asyncErrorHandler(async (req, res, next) => {
 
 // POST /tickets — create
 export const createTicket = asyncErrorHandler(async (req, res, next) => {
-  const { title, description, priority, type, project_details } = req.body;
+  const { title, description, priority, type, project_details, retail_details } =
+    req.body;
   if (!title || !description) {
     return next(new CustomError(400, "Title and description are required"));
   }
@@ -66,6 +68,7 @@ export const createTicket = asyncErrorHandler(async (req, res, next) => {
     status: "Open",
     type: type || "Retail Sale",
     ...(type === "Project" && project_details ? { project_details } : {}),
+    ...(type !== "Project" && retail_details ? { retail_details } : {}),
   });
 
   await recordTicketHistory(ticket._id, req.user._id, "Created ticket");
@@ -114,9 +117,20 @@ export const assignTicket = asyncErrorHandler(async (req, res, next) => {
     return next(new CustomError(400, "Invalid ticket ID format"));
   }
 
+  let assignedModel = "Admin";
+  if (assigned_to) {
+    const isWorker = await Worker.exists({ _id: assigned_to });
+    if (isWorker) {
+      assignedModel = "Worker";
+    }
+  }
+
   const ticket = await Ticket.findByIdAndUpdate(
     id,
-    { assigned_to: assigned_to || null },
+    { 
+      assigned_to: assigned_to || null,
+      assigned_model: assigned_to ? assignedModel : "Admin"
+    },
     { new: true }
   );
   if (!ticket || ticket.isDeleted) return next(new CustomError(404, "Ticket not found"));

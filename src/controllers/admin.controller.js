@@ -5,8 +5,16 @@ import { signToken } from "../services/jwtToken.service.js";
 import mongoose from "mongoose";
 
 export const signup = asyncErrorHandler(async (req, res, next) => {
-  const { name, password, confirmPassword, role, locationId, telegramChatId } =
-    req.body;
+  const {
+    name,
+    password,
+    confirmPassword,
+    role,
+    locationId,
+    telegramChatId,
+    position,
+    dailyRate,
+  } = req.body;
 
   if (!name || !password || !confirmPassword) {
     return next(new CustomError(400, "Missing required fields for signup."));
@@ -20,13 +28,20 @@ export const signup = asyncErrorHandler(async (req, res, next) => {
   // value must stay absent to avoid the partial unique-index collision.
   const telegramId = telegramChatId?.toString().trim();
 
+  // Position (T1/T2/T3) only applies to worker accounts; trim and store only
+  // when the role is worker and a real value was provided.
+  const pos = position?.toString().trim();
+  const isWorker = role === "worker";
+
   const admin = await Admin.create({
     name,
     password,
     confirmPassword,
     role,
     locationId,
+    dailyRate: dailyRate !== undefined ? Number(dailyRate) : 0,
     ...(telegramId ? { telegramChatId: telegramId } : {}),
+    ...(isWorker && pos ? { position: pos } : {}),
   });
 
   res.status(200).json({
@@ -210,7 +225,13 @@ export const userDelete = asyncErrorHandler(async (req, res, next) => {
 });
 
 export const getAllAccounts = asyncErrorHandler(async (req, res, next) => {
-  const admin = await Admin.find()
+  const { role } = req.query;
+  const filter = {};
+  if (role) {
+    filter.role = role;
+  }
+
+  const admin = await Admin.find(filter)
     .select("-password")
     .populate("locationId", "type locationName locationCode locationAddress");
 
@@ -253,7 +274,7 @@ export const getAccountById = asyncErrorHandler(async (req, res, next) => {
 
 export const updateUser = asyncErrorHandler(async (req, res, next) => {
   const { accountId } = req.params;
-  const { name, role, locationId, telegramChatId } = req.body;
+  const { name, role, locationId, telegramChatId, position, dailyRate } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(accountId)) {
     return next(new CustomError(400, "Invalid user ID format."));
@@ -269,6 +290,9 @@ export const updateUser = asyncErrorHandler(async (req, res, next) => {
   if (locationId !== undefined) {
     updateFields.locationId = locationId;
   }
+  if (dailyRate !== undefined) {
+    updateFields.dailyRate = Number(dailyRate);
+  }
 
   // Telegram chat id: a real value sets the link, an empty value clears it
   // via $unset (never store "" — it would collide on the unique index).
@@ -279,6 +303,27 @@ export const updateUser = asyncErrorHandler(async (req, res, next) => {
       updateFields.telegramChatId = telegramId;
     } else {
       unsetFields.telegramChatId = 1;
+    }
+  }
+
+  // Position (T1/T2/T3) applies only to worker accounts.
+  // Resolve the effective role (incoming value, falling back to the current
+  // document) so a role change away from "worker" clears any stale position.
+  // $set and $unset are kept mutually exclusive to avoid a path conflict.
+  if (role !== undefined || position !== undefined) {
+    const currentUser = await Admin.findById(accountId);
+    const targetRole = role !== undefined ? role : currentUser?.role;
+    if (targetRole !== "worker") {
+      // Auto-clear position if role is non-worker
+      unsetFields.position = 1;
+      delete updateFields.position;
+    } else if (position !== undefined) {
+      const pos = position?.toString().trim();
+      if (pos) {
+        updateFields.position = pos;
+      } else {
+        unsetFields.position = 1;
+      }
     }
   }
 

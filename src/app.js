@@ -40,6 +40,10 @@ import clientRouter from "./routes/client.route.js";
 import townshipRouter from "./routes/township.route.js";
 import deliveryAnalyticsRouter from "./routes/deliveryAnalytics.route.js";
 import ticketRouter from "./routes/ticket.route.js";
+import attendanceRouter from "./routes/attendance.route.js";
+import leadRouter from "./routes/lead.route.js";
+import projectRouter from "./routes/project.route.js";
+import workerRouter from "./routes/worker.route.js";
 import { getTelegramBot } from "./services/telegram.service.js";
 const app = express();
 app.use(
@@ -85,6 +89,10 @@ app.use("/api/v1", clientRouter);
 app.use("/api/v1", townshipRouter);
 app.use("/api/v1", deliveryAnalyticsRouter);
 app.use("/api/v1", ticketRouter);
+app.use("/api/v1", attendanceRouter);
+app.use("/api/v1", leadRouter);
+app.use("/api/v1", projectRouter);
+app.use("/api/v1/workers", workerRouter);
 // Telegram webhook (public)
 app.post("/webhook/telegram", (req, res) => {
   const bot = getTelegramBot();

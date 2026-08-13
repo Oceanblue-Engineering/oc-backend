@@ -23,6 +23,13 @@ const ticketSchema = new mongoose.Schema(
       time_duration: { type: String, trim: true },
       note: { type: String, trim: true },
     },
+    retail_details: {
+      deli_location: { type: String, trim: true },
+      deli_time: { type: Date },
+      number_of_people: { type: Number, min: 0 },
+      deli_expense: { type: Number, min: 0 },
+      note: { type: String, trim: true },
+    },
     description: {
       type: String,
       required: [true, "Description is required"],
@@ -46,8 +53,13 @@ const ticketSchema = new mongoose.Schema(
     },
     assigned_to: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Admin",
+      refPath: "assigned_model",
       default: null,
+    },
+    assigned_model: {
+      type: String,
+      enum: ["Admin", "Worker"],
+      default: "Admin",
     },
     created_by: {
       type: mongoose.Schema.Types.ObjectId,

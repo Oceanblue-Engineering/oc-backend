@@ -36,72 +36,14 @@ const clientSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // ── State Flags ────────────────────────────────
-    isPostSale: {
-      type: Boolean,
-      default: false,
-    },
-    // Pipeline type: "sales" | "service"
-    leadType: {
-      type: String,
-      enum: {
-        values: ["sales", "service"],
-        message: "Invalid lead type",
-      },
-      default: "sales",
-    },
     status: {
       type: String,
       enum: {
-        values: [
-          // Sales pipeline
-          "Sale Inquiry",
-          "Product Explain",
-          "Sent Quotation",
-          "Purchased",
-          // Service pipeline
-          "Service Inquiry",
-          "Service Explain",
-          "Meeting Made",
-          "Sent Contract",
-          // Shared
-          "Follow-up",
-          "Ghost",
-          // Post-sale
-          "Signed",
-          "In-Development",
-          "Delivered",
-        ],
-        message: "Invalid client status",
+        values: ["Signed", "In-Development", "Delivered"],
+        message: "Invalid project status",
       },
-      default: "Sale Inquiry",
+      default: "Signed",
     },
-
-    // ── Pre-Sale Metadata ──────────────────────────
-    inquiryDate: {
-      type: Date,
-    },
-    sourceChannel: {
-      type: String,
-      trim: true,
-    },
-    currentProblems: {
-      type: String,
-      trim: true,
-    },
-    desiredOutcome: {
-      type: String,
-      trim: true,
-    },
-    nextActionDate: {
-      type: Date,
-    },
-    conversationLogs: [
-      {
-        text: { type: String, trim: true },
-        date: { type: Date, default: Date.now },
-      },
-    ],
 
     // ── Post-Sale Metadata ─────────────────────────
     projectId: {
@@ -133,10 +75,17 @@ const clientSchema = new mongoose.Schema(
       },
     ],
 
-    // ── POS Integration (auto-created on Signed) ───
+    // ── POS Integration ───
     creditPersonId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CreditPerson",
+      default: null,
+    },
+
+    // ── Original Lead Reference ───
+    leadId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lead",
       default: null,
     },
 
@@ -158,9 +107,8 @@ const clientSchema = new mongoose.Schema(
   }
 );
 
-// Search-friendly indexes
 clientSchema.index({ name: 1, isDeleted: 1 });
-clientSchema.index({ isPostSale: 1, status: 1 });
+clientSchema.index({ status: 1 });
 
 const Client = mongoose.model("Client", clientSchema);
 
