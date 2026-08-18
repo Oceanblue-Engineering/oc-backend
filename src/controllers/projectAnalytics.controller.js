@@ -25,31 +25,38 @@ export const getProjectExpenses = asyncErrorHandler(async (req, res, next) => {
   const filter = {
     projectId: id,
     softDeleted: false,
-    isDeleted: false,
   };
 
   // Add date range filter if provided
   if (startDate || endDate) {
-    filter.expenseDate = {};
+    filter.date = {};
     if (startDate) {
-      filter.expenseDate.$gte = new Date(startDate);
+      filter.date.$gte = new Date(startDate);
     }
     if (endDate) {
-      filter.expenseDate.$lte = new Date(endDate);
+      filter.date.$lte = new Date(endDate);
     }
   }
 
   // Fetch expenses
   const expenses = await Expense.find(filter)
+    .populate({
+      path: "adminId",
+      select: "name role",
+    })
+    .populate({
+      path: "locationId",
+      select: "locationName locationCode",
+    })
     .select("-softDeleted -deletedAt")
-    .sort({ expenseDate: -1 });
+    .sort({ date: -1 });
 
   // Calculate summary
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   // Group by category
   const byCategory = expenses.reduce((acc, exp) => {
-    const category = exp.expenseType || "Other";
+    const category = exp.category || "other";
     acc[category] = (acc[category] || 0) + exp.amount;
     return acc;
   }, {});
@@ -58,10 +65,15 @@ export const getProjectExpenses = asyncErrorHandler(async (req, res, next) => {
   let monthlyTotals = [];
   if (groupBy === "month" || !groupBy) {
     const monthlyData = expenses.reduce((acc, exp) => {
-      if (!exp.expenseDate) return acc;
+      if (!exp.date) return acc;
 
-      const month = exp.expenseDate.toISOString().substring(0, 7); // YYYY-MM format
-      acc[month] = (acc[month] || 0) + exp.amount;
+      const dateObj = new Date(exp.date);
+      const month = !isNaN(dateObj.getTime())
+        ? dateObj.toISOString().substring(0, 7)
+        : "";
+      if (month) {
+        acc[month] = (acc[month] || 0) + exp.amount;
+      }
       return acc;
     }, {});
 
@@ -210,7 +222,6 @@ export const getProjectFinancialSummary = asyncErrorHandler(async (req, res, nex
   const expenseFilter = {
     projectId: id,
     softDeleted: false,
-    isDeleted: false,
   };
 
   const expenses = await Expense.find(expenseFilter);
