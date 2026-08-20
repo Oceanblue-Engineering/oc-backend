@@ -45,6 +45,7 @@ import leadRouter from "./routes/lead.route.js";
 import projectRouter from "./routes/project.route.js";
 import projectAnalyticsRouter from "./routes/projectAnalytics.route.js";
 import workerRouter from "./routes/worker.route.js";
+import invoiceRouter from "./routes/invoice.route.js";
 import { getTelegramBot } from "./services/telegram.service.js";
 const app = express();
 app.use(
@@ -95,6 +96,7 @@ app.use("/api/v1", leadRouter);
 app.use("/api/v1", projectRouter);
 app.use("/api/v1", projectAnalyticsRouter);
 app.use("/api/v1/workers", workerRouter);
+app.use("/api/v1", invoiceRouter);
 // Telegram webhook (public)
 app.post("/webhook/telegram", (req, res) => {
   const bot = getTelegramBot();
