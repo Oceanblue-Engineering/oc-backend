@@ -1,6 +1,6 @@
 import Worker from "../models/worker.model.js";
 import { asyncErrorHandler } from "../utils/asyncErrorHandler.js";
-import CustomError from "../utils/CustomError.js";
+import CustomError from "../utils/customError.js";
 import mongoose from "mongoose";
 
 // CREATE Worker

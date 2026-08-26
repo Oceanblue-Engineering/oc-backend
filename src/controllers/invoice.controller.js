@@ -6,8 +6,10 @@ import mongoose from "mongoose";
 export const createInvoice = asyncErrorHandler(async (req, res, next) => {
   const {
     invoiceNo,
+    quotationNo,
     invoiceDate,
     paymentTerms,
+    validityTerms,
     paymentMethod,
     paymentReceivedDate,
     billTo,
@@ -43,8 +45,10 @@ export const createInvoice = asyncErrorHandler(async (req, res, next) => {
 
   const invoice = await Invoice.create({
     invoiceNo,
+    quotationNo: quotationNo || invoiceNo.replace(/^OB-/, "OB-Q-"),
     invoiceDate: invoiceDate || new Date(),
     paymentTerms: paymentTerms || "50% Advance, 50% on Completion",
+    validityTerms: validityTerms || "Valid for 14 Days",
     paymentMethod: paymentMethod || "KBZ Pay",
     paymentReceivedDate:
       status === "paid"
@@ -100,6 +104,7 @@ export const getInvoices = asyncErrorHandler(async (req, res, next) => {
     const searchRegex = new RegExp(search, "i");
     filter.$or = [
       { invoiceNo: searchRegex },
+      { quotationNo: searchRegex },
       { "billTo.name": searchRegex },
       { "billTo.company": searchRegex },
       { "billTo.phone": searchRegex },

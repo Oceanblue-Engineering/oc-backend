@@ -31,6 +31,11 @@ const invoiceSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    quotationNo: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     invoiceDate: {
       type: Date,
       required: true,
@@ -39,6 +44,10 @@ const invoiceSchema = new mongoose.Schema(
     paymentTerms: {
       type: String,
       default: "50% Advance, 50% on Completion",
+    },
+    validityTerms: {
+      type: String,
+      default: "Valid for 14 Days",
     },
     paymentMethod: {
       type: String,

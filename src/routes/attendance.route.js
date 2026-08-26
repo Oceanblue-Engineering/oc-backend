@@ -3,6 +3,7 @@ import {
   getAttendance,
   saveBulkAttendance,
   getAttendanceSummary,
+  deleteAttendanceRecord,
 } from "../controllers/attendance.controller.js";
 import { protect, permissionGranted } from "../controllers/administrationPolicy.controller.js";
 
@@ -28,6 +29,13 @@ router.get(
   protect,
   permissionGranted("owner", "admin"),
   getAttendanceSummary
+);
+
+router.delete(
+  "/projects/:projectId/attendance/:attendanceId",
+  protect,
+  permissionGranted("owner", "admin"),
+  deleteAttendanceRecord
 );
 
 export default router;

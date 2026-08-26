@@ -176,3 +176,25 @@ export const getAttendanceSummary = asyncErrorHandler(async (req, res, next) => 
     data: summary,
   });
 });
+
+export const deleteAttendanceRecord = asyncErrorHandler(async (req, res, next) => {
+  const { projectId, attendanceId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(projectId) || !mongoose.Types.ObjectId.isValid(attendanceId)) {
+    return next(new CustomError(400, "Invalid project ID or attendance ID format."));
+  }
+
+  const deleted = await Attendance.findOneAndDelete({
+    _id: attendanceId,
+    projectId,
+  });
+
+  if (!deleted) {
+    return next(new CustomError(404, "Attendance record not found."));
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Attendance record deleted successfully.",
+  });
+});
