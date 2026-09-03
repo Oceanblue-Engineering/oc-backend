@@ -59,6 +59,62 @@ const buildStatusButtons = (ticketId, currentStatus) => [
   ],
 ];
 
+// ── Helper to format ticket details (Retail / Project) ─────────
+const formatTicketDetails = (ticket) => {
+  let detailsText = "";
+
+  if (ticket.type !== "Project" && ticket.retail_details) {
+    const rd = ticket.retail_details;
+    const parts = [];
+    if (rd.deli_location) parts.push(`• *ပို့ဆောင်မည့်နေရာ:* ${rd.deli_location}`);
+    if (rd.deli_time) {
+      const formattedDate = new Date(rd.deli_time).toLocaleString("en-US", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+      parts.push(`• *ပို့ဆောင်မည့်အချိန်:* ${formattedDate}`);
+    }
+    if (rd.number_of_people != null) parts.push(`• *လူဦးရေ:* ${rd.number_of_people}`);
+    if (rd.deli_expense != null) parts.push(`• *ပို့ဆောင်ခ:* ${rd.deli_expense}`);
+    if (rd.note) parts.push(`• *မှတ်ချက်:* ${rd.note}`);
+
+    if (parts.length > 0) {
+      detailsText = `\n\n*📦 လက်လီ အရောင်း အသေးစိတ်*\n` + parts.join("\n");
+    }
+  } else if (ticket.type === "Project" && ticket.project_details) {
+    const pd = ticket.project_details;
+    const parts = [];
+    if (pd.project_name) parts.push(`• *ပရောဂျက်အမည်:* ${pd.project_name}`);
+    if (pd.time) {
+      const formattedDate = new Date(pd.time).toLocaleString("en-US", {
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+      parts.push(`• *အချိန်:* ${formattedDate}`);
+    }
+    if (pd.desc) parts.push(`• *ဖော်ပြချက်:* ${pd.desc}`);
+    if (pd.number_of_worker != null) parts.push(`• *လုပ်သားဦးရေ:* ${pd.number_of_worker}`);
+    if (pd.time_duration) parts.push(`• *ကြာချိန်:* ${pd.time_duration}`);
+    if (pd.note) parts.push(`• *မှတ်ချက်:* ${pd.note}`);
+
+    if (parts.length > 0) {
+      detailsText = `\n\n*🏗 ပရောဂျက် အသေးစိတ်*\n` + parts.join("\n");
+    }
+  }
+
+  return detailsText;
+};
+
 /**
  * Send a ticket-assignment notification to the assignee.
  * Skips silently if the assignee has no telegramChatId.
@@ -75,12 +131,16 @@ export const notifyTicketAssigned = async (ticketId) => {
   console.log("[Telegram Debug] Resolved Chat ID:", chatId);
   if (!chatId) return;
 
+  const extraDetails = formatTicketDetails(ticket);
+
   const msg =
     `*🎫 New Ticket Assigned*  \n\n` +
     `*Title:* ${ticket.title}  \n` +
+    `*Type:* ${ticket.type || "Retail Sale"}  \n` +
     `*Priority:* ${ticket.priority}  \n` +
-    `*Created by:* ${ticket.created_by?.name || "—"}  \n\n` +
-    `_${ticket.description}_`;
+    `*Created by:* ${ticket.created_by?.name || "—"}` +
+    `${extraDetails}  \n\n` +
+    `*Description:*  \n_${ticket.description}_`;
 
   try {
     await bot.sendMessage(chatId, msg, {

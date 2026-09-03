@@ -32,6 +32,20 @@ export const createPurchase = asyncErrorHandler(async (req, res, next) => {
         );
       }
 
+      // Validate supplier linkage if product has suppliers configured
+      if (
+        inventoryItem.suppliers &&
+        inventoryItem.suppliers.length > 0 &&
+        !inventoryItem.suppliers.some(
+          (s) => s.toString() === supplierId.toString()
+        )
+      ) {
+        throw new CustomError(
+          400,
+          `Product "${inventoryItem.productName}" is not supplied by the selected supplier`
+        );
+      }
+
       return {
         inventoryId: inventoryItem._id,
         productName: inventoryItem.productName,
