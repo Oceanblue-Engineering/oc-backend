@@ -90,11 +90,20 @@ export const getInvoices = asyncErrorHandler(async (req, res, next) => {
     status,
     startDate,
     endDate,
+    projectId,
     page = 1,
     limit = 50,
   } = req.query;
 
   const filter = { softDeleted: false };
+
+  if (projectId) {
+    if (mongoose.Types.ObjectId.isValid(projectId)) {
+      filter.projectId = new mongoose.Types.ObjectId(projectId);
+    } else {
+      filter.projectId = projectId;
+    }
+  }
 
   if (status && status !== "all") {
     filter.status = status;
@@ -134,8 +143,17 @@ export const getInvoices = asyncErrorHandler(async (req, res, next) => {
   ]);
 
   // Aggregate stats
+  const statsMatch = { softDeleted: false };
+  if (projectId) {
+    if (mongoose.Types.ObjectId.isValid(projectId)) {
+      statsMatch.projectId = new mongoose.Types.ObjectId(projectId);
+    } else {
+      statsMatch.projectId = projectId;
+    }
+  }
+
   const statsAggregation = await Invoice.aggregate([
-    { $match: { softDeleted: false } },
+    { $match: statsMatch },
     {
       $group: {
         _id: null,
