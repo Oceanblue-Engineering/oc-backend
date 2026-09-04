@@ -8,6 +8,7 @@ import {
   softDeletePurchase,
   restorePurchase,
 } from "../controllers/purchase.controller.js";
+import { getPurchasingReport } from "../controllers/purchasingReport.controller.js";
 import {
   createSupplierPayment,
   getPaymentsByPurchaseId,
@@ -38,6 +39,18 @@ router.get(
   protect,
   permissionGranted("owner", "admin"),
   getAllPurchases
+);
+router.get(
+  "/purchase/report",
+  protect,
+  permissionGranted("owner", "admin"),
+  getPurchasingReport
+);
+router.get(
+  "/purchasing/report",
+  protect,
+  permissionGranted("owner", "admin"),
+  getPurchasingReport
 );
 router.get(
   "/purchase/:id",
