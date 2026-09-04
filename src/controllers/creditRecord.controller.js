@@ -437,7 +437,9 @@ export const getCreditRecordsByCreditPersonId = asyncErrorHandler(
           summary: {
             totalCreditRecords: 0,
             totalPaidAmount: 0,
+            totalPaidViaCreditRecords: 0,
             totalOutstandingAmount: 0,
+            totalOrderAmount: 0,
           },
         },
         pagination: {
@@ -494,14 +496,18 @@ export const getCreditRecordsByCreditPersonId = asyncErrorHandler(
       0
     );
 
-    // Calculate outstanding for each order
+    // Calculate outstanding and total paid for each order
     // Note: order.paidAmount already includes all credit payments (updated when each credit payment is recorded)
     // So we can use it directly as the total paid amount
     let totalOutstanding = 0;
+    let totalPaid = 0;
+    let totalOrderAmount = 0;
     const orderMap = new Map();
     for (const order of orders) {
       const orderTotalPaid = order.paidAmount || 0;
       const orderOutstanding = order.finalAmount - orderTotalPaid;
+      totalPaid += orderTotalPaid;
+      totalOrderAmount += order.finalAmount || 0;
       totalOutstanding += Math.max(0, orderOutstanding);
       orderMap.set(order._id.toString(), {
         finalAmount: order.finalAmount,
@@ -592,8 +598,10 @@ export const getCreditRecordsByCreditPersonId = asyncErrorHandler(
         },
         summary: {
           totalCreditRecords: total,
+          totalPaidAmount: totalPaid,
           totalPaidViaCreditRecords: totalCreditPayments,
           totalOutstandingAmount: totalOutstanding,
+          totalOrderAmount,
         },
       },
       pagination: {
