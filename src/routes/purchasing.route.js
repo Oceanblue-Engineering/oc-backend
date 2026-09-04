@@ -3,6 +3,7 @@ import {
   createPurchase,
   getAllPurchases,
   getPurchaseById,
+  updatePurchase,
   updatePurchaseStatus,
   softDeletePurchase,
   restorePurchase,
@@ -25,6 +26,12 @@ router.post(
   protect,
   permissionGranted("owner", "admin"),
   createPurchase
+);
+router.put(
+  "/purchase/:id",
+  protect,
+  permissionGranted("owner", "admin"),
+  updatePurchase
 );
 router.get(
   "/purchase",

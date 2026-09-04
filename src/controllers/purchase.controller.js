@@ -390,3 +390,112 @@ export const restorePurchase = asyncErrorHandler(async (req, res, next) => {
     data: purchase,
   });
 });
+
+export const updatePurchase = asyncErrorHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const {
+    supplierId,
+    products,
+    note,
+    totalAmount,
+    paymentType,
+    paidAmount,
+    dueDate,
+  } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return next(new CustomError(400, "Invalid purchase order ID format"));
+  }
+
+  const existingPurchase = await Purchasing.findById(id);
+  if (!existingPurchase) {
+    return next(new CustomError(404, "Purchase order not found"));
+  }
+
+  if (existingPurchase.isDeleted === true) {
+    return next(
+      new CustomError(
+        400,
+        "Cannot update a soft-deleted purchase order. Please restore the purchase order first."
+      )
+    );
+  }
+
+  if (!supplierId || !products || products.length === 0) {
+    return next(new CustomError(400, "Supplier ID and products are required"));
+  }
+
+  // Fetch product details for each product in the purchase
+  const productsWithDetails = await Promise.all(
+    products.map(async (item) => {
+      if (!item.inventoryId || !item.purchaseQuantity) {
+        throw new CustomError(
+          400,
+          `Product must have inventoryId and purchaseQuantity`
+        );
+      }
+
+      const inventoryItem = await Inventory.findById(item.inventoryId);
+
+      if (!inventoryItem) {
+        throw new CustomError(
+          404,
+          `Product with ID ${item.inventoryId} not found`
+        );
+      }
+
+      // Validate supplier linkage if product has suppliers configured
+      if (
+        inventoryItem.suppliers &&
+        inventoryItem.suppliers.length > 0 &&
+        !inventoryItem.suppliers.some(
+          (s) => s.toString() === supplierId.toString()
+        )
+      ) {
+        throw new CustomError(
+          400,
+          `Product "${inventoryItem.productName}" is not supplied by the selected supplier`
+        );
+      }
+
+      // Check if item was in existing purchase with receivedQuantity
+      const existingProduct = existingPurchase.products.find(
+        (p) => p.inventoryId.toString() === item.inventoryId.toString()
+      );
+      const receivedQuantity = existingProduct ? existingProduct.receivedQuantity || 0 : 0;
+
+      return {
+        inventoryId: inventoryItem._id,
+        productName: inventoryItem.productName,
+        productCode: inventoryItem.productCode,
+        buyingPrice: inventoryItem.buyingPrice,
+        purchaseQuantity: item.purchaseQuantity,
+        receivedQuantity: receivedQuantity,
+      };
+    })
+  );
+
+  // Handle payment logic
+  let finalPaidAmount = 0;
+  if (paymentType === "credit") {
+    finalPaidAmount = paidAmount !== undefined ? paidAmount : (existingPurchase.paidAmount || 0);
+  } else {
+    finalPaidAmount = totalAmount;
+  }
+
+  existingPurchase.supplierId = supplierId;
+  existingPurchase.products = productsWithDetails;
+  existingPurchase.note = note !== undefined ? note : existingPurchase.note;
+  existingPurchase.totalAmount = totalAmount;
+  existingPurchase.paymentType = paymentType || existingPurchase.paymentType;
+  existingPurchase.paidAmount = finalPaidAmount;
+  existingPurchase.dueDate = paymentType === "credit" ? dueDate : null;
+
+  await existingPurchase.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Purchase order updated successfully",
+    data: existingPurchase,
+  });
+});
