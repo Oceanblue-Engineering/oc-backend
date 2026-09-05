@@ -8,7 +8,38 @@ import Inventory from "../models/inventory.model.js";
 import { asyncErrorHandler } from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
 
-// Create new Transfer (supports both GRN → Warehouse and Warehouse → Storefront)
+// Helper to safely populate source and destination for a transfer document
+const populateTransferDetails = async (transfer) => {
+  if (transfer.sourceType === "GRN") {
+    await transfer.populate("sourceId", "grnNumber status");
+  } else if (
+    transfer.sourceType === "Warehouse" ||
+    transfer.sourceType === "Storefront"
+  ) {
+    await transfer.populate("sourceId", "locationName locationCode type");
+  }
+
+  if (transfer.destinationWarehouseId) {
+    await transfer.populate(
+      "destinationWarehouseId",
+      "locationName locationCode type"
+    );
+  }
+  if (transfer.destinationStorefrontId) {
+    await transfer.populate(
+      "destinationStorefrontId",
+      "locationName locationCode type"
+    );
+  }
+
+  await transfer.populate(
+    "lineItems.inventoryId",
+    "productName productCode SKU"
+  );
+  await transfer.populate("transferredBy", "name role");
+};
+
+// Create new Transfer (supports all 5 pipelines: GRN->WH, WH->SF, WH->WH, SF->SF, SF->WH)
 export const createTransfer = asyncErrorHandler(async (req, res, next) => {
   if (!req.user || !req.user._id) {
     return next(
@@ -19,49 +50,85 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
     );
   }
   const transferredBy = req.user._id;
-  // Support both camelCase and lowercase for lineItems
+
   const {
-    sourceType, // "GRN" or "Warehouse"
-    grnId, // For GRN → Warehouse transfers
-    sourceWarehouseId, // For Warehouse → Storefront transfers
-    destinationWarehouseId, // For GRN → Warehouse transfers
-    destinationStorefrontId, // For Warehouse → Storefront transfers
+    sourceType, // "GRN" | "Warehouse" | "Storefront"
+    grnId,
+    sourceWarehouseId,
+    sourceStorefrontId,
+    sourceId: rawSourceId,
+    destinationWarehouseId: rawDestWarehouseId,
+    destinationStorefrontId: rawDestStorefrontId,
+    destinationId, // Optional generic destination ID
+    destinationType, // Optional generic destination type ("warehouse" | "storefront")
     lineItems,
     lineitems,
     transferDate,
     notes,
   } = req.body;
 
-  // Use lineItems (camelCase) or fallback to lineitems (lowercase)
   const transferLineItems = lineItems || lineitems;
 
-  // Determine sourceType if not provided (backward compatibility: default to GRN)
-  const transferSourceType = sourceType || (grnId ? "GRN" : null);
+  // Determine sourceType
+  const transferSourceType =
+    sourceType ||
+    (grnId ? "GRN" : sourceWarehouseId ? "Warehouse" : sourceStorefrontId ? "Storefront" : null);
 
   if (
     !transferSourceType ||
-    !["GRN", "Warehouse"].includes(transferSourceType)
+    !["GRN", "Warehouse", "Storefront"].includes(transferSourceType)
   ) {
     return next(
       new CustomError(
         400,
-        "sourceType is required and must be 'GRN' or 'Warehouse'"
+        "sourceType is required and must be 'GRN', 'Warehouse', or 'Storefront'"
       )
     );
   }
 
-  let sourceId;
-  let destinationId;
-  let destinationType;
+  // Determine sourceId
+  let sourceId =
+    rawSourceId ||
+    (transferSourceType === "GRN"
+      ? grnId
+      : transferSourceType === "Warehouse"
+      ? sourceWarehouseId
+      : sourceStorefrontId);
 
-  // Handle GRN → Warehouse transfer
+  if (!sourceId) {
+    return next(
+      new CustomError(
+        400,
+        `Source ID is required for ${transferSourceType} transfer`
+      )
+    );
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(sourceId)) {
+    return next(new CustomError(400, "Invalid source ID format"));
+  }
+
+  // Determine destination IDs
+  let destinationWarehouseId = rawDestWarehouseId || null;
+  let destinationStorefrontId = rawDestStorefrontId || null;
+
+  if (destinationId && !destinationWarehouseId && !destinationStorefrontId) {
+    if (!mongoose.Types.ObjectId.isValid(destinationId)) {
+      return next(new CustomError(400, "Invalid destination ID format"));
+    }
+    const destLocation = await LocationProfile.findById(destinationId);
+    if (!destLocation) {
+      return next(new CustomError(404, "Destination location not found"));
+    }
+    if (destLocation.type === "warehouse") {
+      destinationWarehouseId = destinationId;
+    } else if (destLocation.type === "storefront") {
+      destinationStorefrontId = destinationId;
+    }
+  }
+
+  // Validate destinations
   if (transferSourceType === "GRN") {
-    if (!grnId) {
-      return next(new CustomError(400, "grnId is required for GRN transfers"));
-    }
-    if (!mongoose.Types.ObjectId.isValid(grnId)) {
-      return next(new CustomError(400, "Invalid GRN ID format"));
-    }
     if (!destinationWarehouseId) {
       return next(
         new CustomError(
@@ -70,47 +137,42 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
         )
       );
     }
-    if (!mongoose.Types.ObjectId.isValid(destinationWarehouseId)) {
-      return next(
-        new CustomError(400, "Invalid destination warehouse ID format")
-      );
-    }
-    sourceId = grnId;
-    destinationId = destinationWarehouseId;
-    destinationType = "warehouse";
-  }
-  // Handle Warehouse → Storefront transfer
-  else if (transferSourceType === "Warehouse") {
-    if (!sourceWarehouseId) {
+  } else {
+    if (!destinationWarehouseId && !destinationStorefrontId) {
       return next(
         new CustomError(
           400,
-          "sourceWarehouseId is required for Warehouse → Storefront transfers"
+          "Either destinationWarehouseId or destinationStorefrontId is required"
         )
       );
     }
-    if (!mongoose.Types.ObjectId.isValid(sourceWarehouseId)) {
-      return next(new CustomError(400, "Invalid source warehouse ID format"));
-    }
-    if (!destinationStorefrontId) {
-      return next(
-        new CustomError(
-          400,
-          "destinationStorefrontId is required for Warehouse → Storefront transfers"
-        )
-      );
-    }
-    if (!mongoose.Types.ObjectId.isValid(destinationStorefrontId)) {
-      return next(
-        new CustomError(400, "Invalid destination storefront ID format")
-      );
-    }
-    sourceId = sourceWarehouseId;
-    destinationId = destinationStorefrontId;
-    destinationType = "storefront";
   }
 
-  // Validate lineItems (support both camelCase and lowercase)
+  if (destinationWarehouseId && destinationStorefrontId) {
+    return next(
+      new CustomError(
+        400,
+        "Cannot specify both destinationWarehouseId and destinationStorefrontId"
+      )
+    );
+  }
+
+  const effectiveDestId = destinationWarehouseId || destinationStorefrontId;
+  if (effectiveDestId && !mongoose.Types.ObjectId.isValid(effectiveDestId)) {
+    return next(new CustomError(400, "Invalid destination ID format"));
+  }
+
+  // Prevent transferring to the same location
+  if (sourceId.toString() === effectiveDestId.toString()) {
+    return next(
+      new CustomError(
+        400,
+        "Source location and destination location cannot be the same"
+      )
+    );
+  }
+
+  // Validate lineItems
   if (
     !transferLineItems ||
     !Array.isArray(transferLineItems) ||
@@ -124,9 +186,8 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
     );
   }
 
-  // Validate source and destination based on transfer type
+  // Validate source location existence and status
   if (transferSourceType === "GRN") {
-    // Fetch GRN with line items
     const grn = await GoodsRecievedNote.findById(sourceId).lean();
     if (!grn) {
       return next(new CustomError(404, "GRN not found"));
@@ -147,20 +208,7 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
     if (!grn.lineItems || grn.lineItems.length === 0) {
       return next(new CustomError(400, "GRN has no line items"));
     }
-
-    // Validate destination warehouse exists
-    const warehouse = await LocationProfile.findOne({
-      _id: destinationId,
-      type: "warehouse",
-    });
-    if (!warehouse) {
-      return next(new CustomError(404, "Destination warehouse not found"));
-    }
-    if (warehouse.isDeleted) {
-      return next(new CustomError(400, "Cannot transfer to deleted warehouse"));
-    }
   } else if (transferSourceType === "Warehouse") {
-    // Validate source warehouse exists
     const sourceWarehouse = await LocationProfile.findOne({
       _id: sourceId,
       type: "warehouse",
@@ -168,32 +216,71 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
     if (!sourceWarehouse) {
       return next(new CustomError(404, "Source warehouse not found"));
     }
-    if (sourceWarehouse.isDeleted) {
+    if (sourceWarehouse.isDeleted || sourceWarehouse.status === "inactive") {
       return next(
-        new CustomError(400, "Cannot create transfer from deleted warehouse")
+        new CustomError(
+          400,
+          "Cannot create transfer from deleted or inactive warehouse"
+        )
       );
     }
-
-    // Validate destination storefront exists
-    const storefront = await LocationProfile.findOne({
-      _id: destinationId,
+  } else if (transferSourceType === "Storefront") {
+    const sourceStorefront = await LocationProfile.findOne({
+      _id: sourceId,
       type: "storefront",
     });
-    if (!storefront) {
-      return next(new CustomError(404, "Destination storefront not found"));
+    if (!sourceStorefront) {
+      return next(new CustomError(404, "Source storefront not found"));
     }
-    if (storefront.isDeleted) {
+    if (sourceStorefront.isDeleted || sourceStorefront.status === "inactive") {
       return next(
-        new CustomError(400, "Cannot transfer to deleted storefront")
+        new CustomError(
+          400,
+          "Cannot create transfer from deleted or inactive storefront"
+        )
       );
     }
   }
 
-  // Validate and process line items
+  // Validate destination location existence and status
+  if (destinationWarehouseId) {
+    const destWarehouse = await LocationProfile.findOne({
+      _id: destinationWarehouseId,
+      type: "warehouse",
+    });
+    if (!destWarehouse) {
+      return next(new CustomError(404, "Destination warehouse not found"));
+    }
+    if (destWarehouse.isDeleted || destWarehouse.status === "inactive") {
+      return next(
+        new CustomError(
+          400,
+          "Cannot transfer to deleted or inactive warehouse"
+        )
+      );
+    }
+  } else if (destinationStorefrontId) {
+    const destStorefront = await LocationProfile.findOne({
+      _id: destinationStorefrontId,
+      type: "storefront",
+    });
+    if (!destStorefront) {
+      return next(new CustomError(404, "Destination storefront not found"));
+    }
+    if (destStorefront.isDeleted || destStorefront.status === "inactive") {
+      return next(
+        new CustomError(
+          400,
+          "Cannot transfer to deleted or inactive storefront"
+        )
+      );
+    }
+  }
+
+  // Validate line items and stock availability
   const validatedLineItems = [];
 
   for (const userItem of transferLineItems) {
-    // Validate required fields
     if (!userItem.productCode) {
       return next(new CustomError(400, "Each line item must have productCode"));
     }
@@ -229,12 +316,8 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
 
     const inventoryIdValue = inventory._id;
 
-    // Validate based on transfer type
     if (transferSourceType === "GRN") {
-      // Fetch GRN again for line item validation
       const grn = await GoodsRecievedNote.findById(sourceId).lean();
-
-      // Find corresponding GRN line item by inventoryId
       const grnLineItem = grn.lineItems.find(
         (item) => item.inventoryId.toString() === inventoryIdValue.toString()
       );
@@ -243,35 +326,31 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
         return next(
           new CustomError(
             400,
-            `GRN does not contain product with code '${userItem.productCode}'. Please ensure the product exists in the GRN line items.`
+            `GRN does not contain product with code '${userItem.productCode}'.`
           )
         );
       }
 
-      // Calculate available quantity from GRN line item
       const goodQuantity = grnLineItem.goodQuantity || 0;
       const transferredQuantity = grnLineItem.transferredQuantity || 0;
       const availableQuantity = goodQuantity - transferredQuantity;
 
-      // Validate transfer quantity doesn't exceed available quantity
       if (userItem.quantity > availableQuantity) {
         return next(
           new CustomError(
             400,
-            `Transfer quantity (${userItem.quantity}) exceeds available quantity (${availableQuantity}) for product '${userItem.productCode}'. Available quantity = goodQuantity (${goodQuantity}) - transferredQuantity (${transferredQuantity})`
+            `Transfer quantity (${userItem.quantity}) exceeds available quantity (${availableQuantity}) for product '${userItem.productCode}'`
           )
         );
       }
 
-      // Build validated line item for GRN transfer
       validatedLineItems.push({
         inventoryId: inventoryIdValue,
         quantity: userItem.quantity,
-        grnLineItemId: grnLineItem._id, // Link to GRN line item for tracking
+        grnLineItemId: grnLineItem._id,
         notes: userItem.notes || null,
       });
     } else if (transferSourceType === "Warehouse") {
-      // Validate warehouse has sufficient stock
       const warehouseStock = await WarehouseStock.findOne({
         inventoryId: inventoryIdValue,
         warehouseId: sourceId,
@@ -296,84 +375,82 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
         );
       }
 
-      // Build validated line item for Warehouse transfer
       validatedLineItems.push({
         inventoryId: inventoryIdValue,
         quantity: userItem.quantity,
         notes: userItem.notes || null,
-        // No grnLineItemId for Warehouse → Storefront transfers
+      });
+    } else if (transferSourceType === "Storefront") {
+      const storefrontStock = await StorefrontInventory.findOne({
+        inventoryId: inventoryIdValue,
+        storefrontId: sourceId,
+      }).lean();
+
+      if (!storefrontStock) {
+        return next(
+          new CustomError(
+            404,
+            `Storefront stock not found for product '${userItem.productCode}' in source storefront`
+          )
+        );
+      }
+
+      const availableQuantity = storefrontStock.quantity || 0;
+      if (userItem.quantity > availableQuantity) {
+        return next(
+          new CustomError(
+            400,
+            `Transfer quantity (${userItem.quantity}) exceeds available storefront stock (${availableQuantity}) for product '${userItem.productCode}'`
+          )
+        );
+      }
+
+      validatedLineItems.push({
+        inventoryId: inventoryIdValue,
+        quantity: userItem.quantity,
+        notes: userItem.notes || null,
       });
     }
   }
 
-  // Validate and ensure inventory items exist in destination
-  // This ensures we can catch errors early and provide clear error messages
+  // Ensure inventory items exist in destination
   try {
-    if (transferSourceType === "GRN") {
-      // For GRN → Warehouse: Ensure inventory items exist in destination warehouse
+    if (destinationWarehouseId) {
       for (const lineItem of validatedLineItems) {
         const existingWarehouseStock = await WarehouseStock.findOne({
           inventoryId: lineItem.inventoryId,
-          warehouseId: destinationId,
+          warehouseId: destinationWarehouseId,
         });
 
         if (!existingWarehouseStock) {
-          // Create warehouse stock record with quantity 0 if it doesn't exist
-          try {
-            await WarehouseStock.create({
-              inventoryId: lineItem.inventoryId,
-              warehouseId: destinationId,
-              quantity: 0,
-            });
-          } catch (error) {
-            // If creation fails, return detailed error
-            const inventory = await Inventory.findById(lineItem.inventoryId);
-            const productCode = inventory?.productCode || lineItem.inventoryId;
-            return next(
-              new CustomError(
-                400,
-                `Failed to create inventory record for product '${productCode}' in destination warehouse. ${error.message}`
-              )
-            );
-          }
+          await WarehouseStock.create({
+            inventoryId: lineItem.inventoryId,
+            warehouseId: destinationWarehouseId,
+            quantity: 0,
+          });
         }
       }
-    } else if (transferSourceType === "Warehouse") {
-      // For Warehouse → Storefront: Ensure inventory items exist in destination storefront
+    } else if (destinationStorefrontId) {
       for (const lineItem of validatedLineItems) {
         const existingStorefrontInventory = await StorefrontInventory.findOne({
           inventoryId: lineItem.inventoryId,
-          storefrontId: destinationId,
+          storefrontId: destinationStorefrontId,
         });
 
         if (!existingStorefrontInventory) {
-          // Create storefront inventory record with quantity 0 if it doesn't exist
-          try {
-            await StorefrontInventory.create({
-              inventoryId: lineItem.inventoryId,
-              storefrontId: destinationId,
-              quantity: 0,
-            });
-          } catch (error) {
-            // If creation fails, return detailed error
-            const inventory = await Inventory.findById(lineItem.inventoryId);
-            const productCode = inventory?.productCode || lineItem.inventoryId;
-            return next(
-              new CustomError(
-                400,
-                `Failed to create inventory record for product '${productCode}' in destination storefront. ${error.message}`
-              )
-            );
-          }
+          await StorefrontInventory.create({
+            inventoryId: lineItem.inventoryId,
+            storefrontId: destinationStorefrontId,
+            quantity: 0,
+          });
         }
       }
     }
   } catch (error) {
-    // Catch any unexpected errors during validation
     return next(
       new CustomError(
         500,
-        `Error validating destination inventory: ${error.message}`
+        `Error initializing destination inventory: ${error.message}`
       )
     );
   }
@@ -381,66 +458,38 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
   // Auto-generate transfer number
   const transferNumber = await Transfer.generateTransferNumber();
 
-  // Use MongoDB transaction to ensure ACID properties
-  // Transfer stock immediately when creating transfer document
+  // MongoDB transaction to transfer stock atomically
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Create transfer document
     const transferData = {
       transferNumber,
       sourceType: transferSourceType,
       sourceId,
+      destinationWarehouseId,
+      destinationStorefrontId,
       lineItems: validatedLineItems,
       transferDate: transferDate || new Date(),
       notes: notes || null,
-      status: "completed", // Set to completed immediately since we transfer stock now
+      status: "completed",
       transferredBy,
     };
 
-    // Add destination based on transfer type
-    if (transferSourceType === "GRN") {
-      transferData.destinationWarehouseId = destinationId;
-    } else if (transferSourceType === "Warehouse") {
-      transferData.destinationStorefrontId = destinationId;
-    }
-
-    // Create transfer document within transaction
-    // Note: Transfer.create() with session requires array syntax for transactions
     const newTransferArray = await Transfer.create([transferData], { session });
     const transfer = newTransferArray[0];
 
-    // Immediately transfer stock atomically (handles both GRN → Warehouse and Warehouse → Storefront)
+    // Atomically transfer stock
     await transfer.updateStock(session);
 
-    // Set receivedDate since transfer is completed
     transfer.receivedDate = new Date();
     await transfer.save({ session });
 
-    // Commit transaction - all operations succeed or all fail
     await session.commitTransaction();
     await session.endSession();
 
     // Populate references for response
-    if (transferSourceType === "GRN") {
-      await transfer.populate("sourceId", "grnNumber status");
-      await transfer.populate(
-        "destinationWarehouseId",
-        "locationName locationCode"
-      );
-    } else if (transferSourceType === "Warehouse") {
-      await transfer.populate("sourceId", "locationName locationCode");
-      await transfer.populate(
-        "destinationStorefrontId",
-        "locationName locationCode"
-      );
-    }
-    await transfer.populate(
-      "lineItems.inventoryId",
-      "productName productCode SKU"
-    );
-    await transfer.populate("transferredBy", "name role");
+    await populateTransferDetails(transfer);
 
     res.status(201).json({
       success: true,
@@ -448,7 +497,6 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
       data: transfer,
     });
   } catch (error) {
-    // Rollback transaction on any error
     await session.abortTransaction();
     await session.endSession();
     return next(
@@ -457,14 +505,26 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
   }
 });
 
+// Fetch all transfers
 export const getTransfers = asyncErrorHandler(async (req, res, next) => {
   const transfers = await Transfer.find()
     .populate("transferredBy", "name role")
     .populate("lineItems.inventoryId", "productName productCode SKU")
-    .lean();
-  if (!transfers) {
-    return next(new CustomError(404, "Transfers not found"));
+    .populate("destinationWarehouseId", "locationName locationCode type")
+    .populate("destinationStorefrontId", "locationName locationCode type")
+    .sort({ createdAt: -1 });
+
+  for (const transfer of transfers) {
+    if (transfer.sourceType === "GRN") {
+      await transfer.populate("sourceId", "grnNumber status");
+    } else if (
+      transfer.sourceType === "Warehouse" ||
+      transfer.sourceType === "Storefront"
+    ) {
+      await transfer.populate("sourceId", "locationName locationCode type");
+    }
   }
+
   res.status(200).json({
     success: true,
     message: "Transfers fetched successfully",
@@ -472,30 +532,16 @@ export const getTransfers = asyncErrorHandler(async (req, res, next) => {
   });
 });
 
+// Fetch single transfer by ID
 export const getTransferById = asyncErrorHandler(async (req, res, next) => {
   const { id } = req.params;
-  const transfer = await Transfer.findById(id)
-    .populate("transferredBy", "name role")
-    .populate("lineItems.inventoryId", "productName productCode SKU");
+  const transfer = await Transfer.findById(id);
 
   if (!transfer) {
     return next(new CustomError(404, "Transfer not found"));
   }
 
-  // Populate source and destination based on transfer type
-  if (transfer.sourceType === "GRN") {
-    await transfer.populate("sourceId", "grnNumber status");
-    await transfer.populate(
-      "destinationWarehouseId",
-      "locationName locationCode"
-    );
-  } else if (transfer.sourceType === "Warehouse") {
-    await transfer.populate("sourceId", "locationName locationCode");
-    await transfer.populate(
-      "destinationStorefrontId",
-      "locationName locationCode"
-    );
-  }
+  await populateTransferDetails(transfer);
 
   res.status(200).json({
     success: true,
@@ -504,6 +550,7 @@ export const getTransferById = asyncErrorHandler(async (req, res, next) => {
   });
 });
 
+// Update transfer status
 export const updateTransferStatus = asyncErrorHandler(
   async (req, res, next) => {
     const { id } = req.params;
@@ -521,7 +568,6 @@ export const updateTransferStatus = asyncErrorHandler(
       );
     }
 
-    // Use MongoDB transaction to ensure ACID properties when completing transfer
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -538,34 +584,17 @@ export const updateTransferStatus = asyncErrorHandler(
         return next(new CustomError(404, "Transfer not found"));
       }
 
-      // When status is "completed", update stock atomically (handles both GRN → Warehouse and Warehouse → Storefront)
+      // If status changed to completed, update stock atomically
       if (status === "completed") {
         await updatedTransfer.updateStock(session);
+        updatedTransfer.receivedDate = new Date();
+        await updatedTransfer.save({ session });
       }
 
-      // Commit transaction
       await session.commitTransaction();
       await session.endSession();
 
-      // Populate references for response based on transfer type
-      if (updatedTransfer.sourceType === "GRN") {
-        await updatedTransfer.populate("sourceId", "grnNumber status");
-        await updatedTransfer.populate(
-          "destinationWarehouseId",
-          "locationName locationCode"
-        );
-      } else if (updatedTransfer.sourceType === "Warehouse") {
-        await updatedTransfer.populate("sourceId", "locationName locationCode");
-        await updatedTransfer.populate(
-          "destinationStorefrontId",
-          "locationName locationCode"
-        );
-      }
-      await updatedTransfer.populate(
-        "lineItems.inventoryId",
-        "productName productCode SKU"
-      );
-      await updatedTransfer.populate("transferredBy", "name role");
+      await populateTransferDetails(updatedTransfer);
 
       res.status(200).json({
         success: true,
@@ -573,7 +602,6 @@ export const updateTransferStatus = asyncErrorHandler(
         data: updatedTransfer,
       });
     } catch (error) {
-      // Rollback transaction on error
       await session.abortTransaction();
       await session.endSession();
       return next(
