@@ -66,6 +66,15 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
         totalCreditAmount: {
           $sum: { $cond: [{ $eq: ["$paymentType", "credit"] }, "$finalAmount", 0] },
         },
+        totalOutstandingAmount: {
+          $sum: {
+            $cond: [
+              { $eq: ["$paymentType", "credit"] },
+              { $max: [0, { $subtract: ["$finalAmount", "$paidAmount"] }] },
+              0,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -74,7 +83,7 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
     totalFinalAmount: 0, totalPaidAmount: 0,
     totalDiscount: 0, totalExtraChange: 0,
     orderCount: 0, creditOrderCount: 0, paidOrderCount: 0,
-    totalCreditAmount: 0,
+    totalCreditAmount: 0, totalOutstandingAmount: 0,
   };
 
   return {
@@ -84,6 +93,8 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
       finalAmountFormatted: formatMyanmarCurrency(report.totalFinalAmount),
       paidAmount: report.totalPaidAmount,
       paidAmountFormatted: formatMyanmarCurrency(report.totalPaidAmount),
+      outstandingAmount: report.totalOutstandingAmount || 0,
+      outstandingAmountFormatted: formatMyanmarCurrency(report.totalOutstandingAmount || 0),
       discount: report.totalDiscount,
       discountFormatted: formatMyanmarCurrency(report.totalDiscount),
       extraChange: report.totalExtraChange,

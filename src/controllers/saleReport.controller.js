@@ -86,7 +86,45 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
             $sum: { $cond: [{ $eq: ["$paymentType", "credit"] }, 1, 0] },
           },
           paidOrderCount: {
-            $sum: { $cond: [{ $eq: ["$paymentType", "paid"] }, 1, 0] },
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$paymentType", "paid"] },
+                    { $ne: ["$paymentMethod", "foc"] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          focOrderCount: {
+            $sum: { $cond: [{ $eq: ["$paymentMethod", "foc"] }, 1, 0] },
+          },
+          totalCreditFinalAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$paymentType", "credit"] }, "$finalAmount", 0],
+            },
+          },
+          totalCreditPaidAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$paymentType", "credit"] }, "$paidAmount", 0],
+            },
+          },
+          totalOutstandingAmount: {
+            $sum: {
+              $cond: [
+                { $eq: ["$paymentType", "credit"] },
+                { $max: [0, { $subtract: ["$finalAmount", "$paidAmount"] }] },
+                0,
+              ],
+            },
+          },
+          totalFocAmount: {
+            $sum: {
+              $cond: [{ $eq: ["$paymentMethod", "foc"] }, "$finalAmount", 0],
+            },
           },
         },
       },
@@ -96,6 +134,11 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
     const report = saleReport[0] || {
       totalFinalAmount: 0,
       totalPaidAmount: 0,
+      totalCreditFinalAmount: 0,
+      totalCreditPaidAmount: 0,
+      totalOutstandingAmount: 0,
+      totalFocAmount: 0,
+      focOrderCount: 0,
       totalSubTotal: 0,
       totalTax: 0,
       totalDiscount: 0,
@@ -126,6 +169,11 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
         report: {
           finalAmount: report.totalFinalAmount, // Main metric as requested
           paidAmount: report.totalPaidAmount,
+          outstandingAmount: report.totalOutstandingAmount || 0,
+          creditFinalAmount: report.totalCreditFinalAmount || 0,
+          creditPaidAmount: report.totalCreditPaidAmount || 0,
+          focAmount: report.totalFocAmount || 0,
+          focOrderCount: report.focOrderCount || 0,
           subTotal: report.totalSubTotal,
           tax: report.totalTax,
           discount: report.totalDiscount,
