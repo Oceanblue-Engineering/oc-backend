@@ -503,7 +503,25 @@ export const getAllOrders = asyncErrorHandler(async (req, res, next) => {
   };
 
   // Extract query parameters
-  const { paymentType, paymentMethod, deliveryStatus, township } = req.query;
+  const {
+    storefrontId,
+    paymentType,
+    paymentMethod,
+    deliveryStatus,
+    township,
+  } = req.query;
+
+  // Add storefrontId filter if provided
+  if (
+    storefrontId !== undefined &&
+    storefrontId !== "" &&
+    storefrontId !== "all"
+  ) {
+    if (!mongoose.Types.ObjectId.isValid(storefrontId)) {
+      return next(new CustomError(400, "Invalid storefront ID format"));
+    }
+    filter.storefrontId = storefrontId;
+  }
 
   // Add paymentType filter if provided
   if (paymentType !== undefined && paymentType !== "") {
@@ -552,6 +570,7 @@ export const getAllOrders = asyncErrorHandler(async (req, res, next) => {
   }
 
   const orders = await Order.find(filter)
+    .sort({ createdAt: -1 })
     .populate("storefrontId", "locationName locationCode")
     .populate("ordersProducts.inventoryId", "productName productCode SKU")
     .populate("creditPersonId", "name phone address")

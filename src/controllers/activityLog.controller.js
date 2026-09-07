@@ -3,6 +3,7 @@ import asyncErrorHandler from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
 import { createDateFilter } from "../utils/dateFilter.utils.js";
 import mongoose from "mongoose";
+import moment from "moment-timezone";
 
 // Get paginated activity logs with filters & search
 export const getActivityLogs = asyncErrorHandler(async (req, res, next) => {
@@ -90,10 +91,8 @@ export const getActivityLogs = asyncErrorHandler(async (req, res, next) => {
 
 // Get summary statistics for activity logs
 export const getActivityLogStats = asyncErrorHandler(async (req, res, next) => {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfWeek = new Date(startOfToday);
-  startOfWeek.setDate(startOfWeek.getDate() - 7);
+  const startOfToday = moment.tz("Asia/Yangon").startOf("day").toDate();
+  const startOfWeek = moment.tz("Asia/Yangon").startOf("day").subtract(7, "days").toDate();
 
   const [
     totalLogs,

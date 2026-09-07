@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import moment from "moment-timezone";
 import * as aiSaleReport from "./aiSaleReport.service.js";
 import ShopSetting from "../models/shopSetting.model.js";
 import DailyReport from "../models/dailyReport.model.js";
@@ -22,10 +23,10 @@ function sendNotificationToAdmin(text) {
 }
 
 async function generateDailyReport() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+  const now = moment().tz("Asia/Yangon");
+  const year = now.format("YYYY");
+  const month = now.format("MM");
+  const day = now.format("DD");
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${day}`;
   const dateKey = `${year}-${month}-${day}`;

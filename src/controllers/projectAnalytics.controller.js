@@ -5,6 +5,8 @@ import Attendance from "../models/attendance.model.js";
 import Worker from "../models/worker.model.js";
 import asyncErrorHandler from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
+import { createDateFilter } from "../utils/dateFilter.utils.js";
+import moment from "moment-timezone";
 
 // GET /api/v1/projects/:id/expenses - ပရောဂျက်တစ်ခုချင်းစီ၏ ကုန်ကျစရိတ်များ
 export const getProjectExpenses = asyncErrorHandler(async (req, res, next) => {
@@ -29,12 +31,12 @@ export const getProjectExpenses = asyncErrorHandler(async (req, res, next) => {
 
   // Add date range filter if provided
   if (startDate || endDate) {
-    filter.date = {};
-    if (startDate) {
-      filter.date.$gte = new Date(startDate);
-    }
-    if (endDate) {
-      filter.date.$lte = new Date(endDate);
+    try {
+      const dateFilter = createDateFilter(req.query, "date", false);
+      Object.assign(filter, dateFilter);
+    } catch (error) {
+      if (error instanceof CustomError) return next(error);
+      return next(new CustomError(400, error.message || "Invalid date filter"));
     }
   }
 
@@ -122,13 +124,12 @@ export const getProjectPayrollSummary = asyncErrorHandler(async (req, res, next)
 
   // Add month filter if provided
   if (month) {
-    const [year, monthNum] = month.split("-").map(Number);
-    const startDate = new Date(year, monthNum - 1, 1);
-    const endDate = new Date(year, monthNum, 0, 23, 59, 59, 999);
+    const start = moment.tz(month, "YYYY-MM", "Asia/Yangon").startOf("month");
+    const end = moment.tz(month, "YYYY-MM", "Asia/Yangon").endOf("month");
 
     filter.date = {
-      $gte: startDate,
-      $lte: endDate,
+      $gte: start.toDate(),
+      $lte: end.toDate(),
     };
   }
 

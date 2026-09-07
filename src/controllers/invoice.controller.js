@@ -1,5 +1,6 @@
 import { asyncErrorHandler } from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
+import { createDateFilter } from "../utils/dateFilter.utils.js";
 import Invoice from "../models/invoice.model.js";
 import mongoose from "mongoose";
 
@@ -121,14 +122,12 @@ export const getInvoices = asyncErrorHandler(async (req, res, next) => {
   }
 
   if (startDate || endDate) {
-    filter.invoiceDate = {};
-    if (startDate) {
-      filter.invoiceDate.$gte = new Date(startDate);
-    }
-    if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      filter.invoiceDate.$lte = end;
+    try {
+      const dateFilter = createDateFilter(req.query, "invoiceDate", false);
+      Object.assign(filter, dateFilter);
+    } catch (error) {
+      if (error instanceof CustomError) return next(error);
+      return next(new CustomError(400, error.message || "Invalid date filter"));
     }
   }
 

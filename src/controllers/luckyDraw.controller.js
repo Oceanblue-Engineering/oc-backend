@@ -295,9 +295,13 @@ export const getRedemptions = asyncErrorHandler(async (req, res, next) => {
 
   // Date Logic
   if (startDate || endDate) {
-    filter.createdAt = {};
-    if (startDate) filter.createdAt.$gte = new Date(startDate);
-    if (endDate) filter.createdAt.$lte = new Date(endDate);
+    try {
+      const dateFilter = createDateFilter(req.query, "createdAt", false);
+      Object.assign(filter, dateFilter);
+    } catch (error) {
+      if (error instanceof CustomError) return next(error);
+      return next(new CustomError(400, error.message || "Invalid date filter"));
+    }
   }
 
   const [totalItems, redemptions] = await Promise.all([

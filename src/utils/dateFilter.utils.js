@@ -1,9 +1,11 @@
 import moment from "moment-timezone";
 import CustomError from "./customError.js";
 
+const TIMEZONE = "Asia/Yangon";
+
 /**
  * Creates a MongoDB date filter object based on startDate and endDate query parameters
- * Dates are parsed in UTC timezone to match MongoDB's date storage
+ * Dates are parsed in Asia/Yangon (Myanmar) timezone (UTC+6:30) to correctly match business day boundaries
  * @param {Object} query - Express request query object
  * @param {string} dateField - The field name to filter on (default: 'createdAt')
  * @param {boolean} isStringField - Whether the date field is stored as a string (default: false)
@@ -26,7 +28,7 @@ export const createDateFilter = (
   let startMoment = null;
   let endMoment = null;
 
-  // Parse startDate in UTC
+  // Parse startDate in Asia/Yangon timezone
   if (startDate) {
     // Try parsing with common date formats
     const dateFormats = [
@@ -39,15 +41,15 @@ export const createDateFilter = (
 
     startMoment = null;
     for (const format of dateFormats) {
-      startMoment = moment.utc(startDate, format);
+      startMoment = moment.tz(startDate, format, TIMEZONE);
       if (startMoment.isValid()) {
         break;
       }
     }
 
-    // If still not valid, try parsing without format (moment's default parsing in UTC)
+    // If still not valid, try parsing without format
     if (!startMoment || !startMoment.isValid()) {
-      startMoment = moment.utc(startDate);
+      startMoment = moment.tz(startDate, TIMEZONE);
     }
 
     if (!startMoment.isValid()) {
@@ -56,14 +58,13 @@ export const createDateFilter = (
         `Invalid startDate format: "${startDate}". Please use a valid date format (e.g., YYYY-MM-DD or YYYY-MM-DD HH:mm:ss).`
       );
     }
-    // For Date fields, set to start of day in UTC
-    // For string fields, we'll just extract the date part later
+    // For Date fields, set to start of day in Asia/Yangon timezone
     if (!isStringField) {
       startMoment.startOf("day");
     }
   }
 
-  // Parse endDate in UTC
+  // Parse endDate in Asia/Yangon timezone
   if (endDate) {
     // Try parsing with common date formats
     const dateFormats = [
@@ -76,15 +77,15 @@ export const createDateFilter = (
 
     endMoment = null;
     for (const format of dateFormats) {
-      endMoment = moment.utc(endDate, format);
+      endMoment = moment.tz(endDate, format, TIMEZONE);
       if (endMoment.isValid()) {
         break;
       }
     }
 
-    // If still not valid, try parsing without format (moment's default parsing in UTC)
+    // If still not valid, try parsing without format
     if (!endMoment || !endMoment.isValid()) {
-      endMoment = moment.utc(endDate);
+      endMoment = moment.tz(endDate, TIMEZONE);
     }
 
     if (!endMoment.isValid()) {
@@ -93,8 +94,7 @@ export const createDateFilter = (
         `Invalid endDate format: "${endDate}". Please use a valid date format (e.g., YYYY-MM-DD or YYYY-MM-DD HH:mm:ss).`
       );
     }
-    // For Date fields, set to end of day in UTC
-    // For string fields, we'll just extract the date part later
+    // For Date fields, set to end of day in Asia/Yangon timezone
     if (!isStringField) {
       endMoment.endOf("day");
     }
