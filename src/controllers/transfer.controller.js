@@ -128,24 +128,13 @@ export const createTransfer = asyncErrorHandler(async (req, res, next) => {
   }
 
   // Validate destinations
-  if (transferSourceType === "GRN") {
-    if (!destinationWarehouseId) {
-      return next(
-        new CustomError(
-          400,
-          "destinationWarehouseId is required for GRN → Warehouse transfers"
-        )
-      );
-    }
-  } else {
-    if (!destinationWarehouseId && !destinationStorefrontId) {
-      return next(
-        new CustomError(
-          400,
-          "Either destinationWarehouseId or destinationStorefrontId is required"
-        )
-      );
-    }
+  if (!destinationWarehouseId && !destinationStorefrontId) {
+    return next(
+      new CustomError(
+        400,
+        "Either destinationWarehouseId or destinationStorefrontId is required"
+      )
+    );
   }
 
   if (destinationWarehouseId && destinationStorefrontId) {
