@@ -48,6 +48,7 @@ import workerRouter from "./routes/worker.route.js";
 import invoiceRouter from "./routes/invoice.route.js";
 import quotationCategoryRouter from "./routes/quotationCategory.route.js";
 import activityLogRouter from "./routes/activityLog.route.js";
+import personalExpenseRouter from "./routes/personalExpense.route.js";
 import { activityLoggerMiddleware } from "./middlewares/activityLogger.middleware.js";
 import { getTelegramBot } from "./services/telegram.service.js";
 const app = express();
@@ -103,6 +104,7 @@ app.use("/api/v1/workers", workerRouter);
 app.use("/api/v1", invoiceRouter);
 app.use("/api/v1", quotationCategoryRouter);
 app.use("/api/v1", activityLogRouter);
+app.use("/api/v1", personalExpenseRouter);
 // Telegram webhook (public)
 app.post("/webhook/telegram", (req, res) => {
   const bot = getTelegramBot();
