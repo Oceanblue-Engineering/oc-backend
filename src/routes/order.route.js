@@ -10,6 +10,7 @@ import {
   removeOrderItems,
   hardDeleteOrder,
   updateOrderDeliveryStatus,
+  updateEntireOrder,
 } from "../controllers/order.controller.js";
 
 const router = express.Router();
@@ -80,6 +81,14 @@ router.patch(
   protect,
   permissionGranted("owner"),
   removeOrderItems
+);
+
+// Update entire order (POS-style edit)
+router.patch(
+  "/order/:orderId",
+  protect,
+  permissionGranted("owner", "admin", "cashier"),
+  updateEntireOrder
 );
 
 // Hard delete order
