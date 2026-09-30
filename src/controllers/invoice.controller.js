@@ -8,6 +8,7 @@ export const createInvoice = asyncErrorHandler(async (req, res, next) => {
   const {
     invoiceNo,
     quotationNo,
+    documentType,
     invoiceDate,
     paymentTerms,
     validityTerms,
@@ -47,6 +48,7 @@ export const createInvoice = asyncErrorHandler(async (req, res, next) => {
   const invoice = await Invoice.create({
     invoiceNo,
     quotationNo: quotationNo || invoiceNo.replace(/^OB-/, "OB-Q-"),
+    documentType: documentType || "invoice",
     invoiceDate: invoiceDate || new Date(),
     paymentTerms: paymentTerms || "50% Advance, 50% on Completion",
     validityTerms: validityTerms || "Valid for 14 Days",

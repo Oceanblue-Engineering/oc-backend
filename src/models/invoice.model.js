@@ -36,6 +36,12 @@ const invoiceSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    documentType: {
+      type: String,
+      enum: ["quotation", "invoice", "receipt"],
+      default: "invoice",
+      index: true,
+    },
     invoiceDate: {
       type: Date,
       required: true,
