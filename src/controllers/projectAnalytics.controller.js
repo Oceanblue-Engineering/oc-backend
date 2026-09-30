@@ -119,7 +119,6 @@ export const getProjectPayrollSummary = asyncErrorHandler(async (req, res, next)
   // Build attendance filter
   const filter = {
     projectId: id,
-    isDeleted: false,
   };
 
   // Add month filter if provided
@@ -135,39 +134,50 @@ export const getProjectPayrollSummary = asyncErrorHandler(async (req, res, next)
 
   // Fetch attendance records
   const attendanceRecords = await Attendance.find(filter)
-    .populate("workerId", "name position dailyRate")
-    .select("workerId hoursWorked dailyWage date status");
+    .populate("userId", "name position dailyRate role")
+    .select("userId status shift overtimeWage dailyWageEarned date");
 
   // Group by worker and calculate payroll
-  const workerMap = new Map();
+  const workerMap = {};
   let totalHoursWorked = 0;
   let totalPayroll = 0;
 
   attendanceRecords.forEach((record) => {
-    if (!record.workerId) return;
+    if (!record.userId) return;
 
-    const workerId = record.workerId._id.toString();
-    const worker = workerId in workerMap
-      ? workerMap[workerId]
-      : {
-          _id: workerId,
-          name: record.workerId.name,
-          position: record.workerId.position || "General",
-          dailyRate: record.workerId.dailyRate || 0,
-          hoursWorked: 0,
-          totalWage: 0,
-          attendanceCount: 0,
-        };
+    const workerId = record.userId._id ? record.userId._id.toString() : record.userId.toString();
+    if (!workerMap[workerId]) {
+      workerMap[workerId] = {
+        _id: workerId,
+        name: record.userId.name || "Unknown Worker",
+        position: record.userId.position || "General",
+        dailyRate: record.userId.dailyRate || 0,
+        hoursWorked: 0,
+        totalWage: 0,
+        attendanceCount: 0,
+      };
+    }
 
-    const hours = record.hoursWorked || 8;
-    const dailyRate = record.workerId.dailyRate || 0;
-    const wage = hours * (dailyRate / 8);
+    const worker = workerMap[workerId];
+
+    // Calculate hours worked based on status
+    let hours = 8;
+    if (record.status === "half_day") {
+      hours = 4;
+    } else if (record.status === "absent" || record.status === "overtime_only") {
+      hours = 0;
+    }
+
+    const wage = typeof record.dailyWageEarned === "number"
+      ? record.dailyWageEarned
+      : (hours * ((record.userId.dailyRate || 0) / 8) + (record.overtimeWage || 0));
 
     worker.hoursWorked += hours;
     worker.totalWage += wage;
-    worker.attendanceCount += 1;
+    if (record.status === "present" || record.status === "half_day") {
+      worker.attendanceCount += 1;
+    }
 
-    workerMap[workerId] = worker;
     totalHoursWorked += hours;
     totalPayroll += wage;
   });
@@ -195,6 +205,7 @@ export const getProjectPayrollSummary = asyncErrorHandler(async (req, res, next)
         totalWorkers: workers.length,
         totalHoursWorked,
         totalPayroll,
+        totalPayrollCost: totalPayroll,
         avgDailyRate,
         byPosition,
         attendanceRecordCount: attendanceRecords.length,
@@ -231,19 +242,26 @@ export const getProjectFinancialSummary = asyncErrorHandler(async (req, res, nex
   // Get payroll summary (reuse logic from payroll endpoint)
   const attendanceFilter = {
     projectId: id,
-    isDeleted: false,
   };
 
   const attendanceRecords = await Attendance.find(attendanceFilter)
-    .populate("workerId", "dailyRate");
+    .populate("userId", "dailyRate");
 
   let totalPayroll = 0;
   attendanceRecords.forEach((record) => {
-    if (!record.workerId) return;
+    if (!record.userId) return;
 
-    const hours = record.hoursWorked || 8;
-    const dailyRate = record.workerId.dailyRate || 0;
-    const wage = hours * (dailyRate / 8);
+    let hours = 8;
+    if (record.status === "half_day") {
+      hours = 4;
+    } else if (record.status === "absent" || record.status === "overtime_only") {
+      hours = 0;
+    }
+
+    const wage = typeof record.dailyWageEarned === "number"
+      ? record.dailyWageEarned
+      : (hours * ((record.userId.dailyRate || 0) / 8) + (record.overtimeWage || 0));
+
     totalPayroll += wage;
   });
 
