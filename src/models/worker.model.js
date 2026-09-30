@@ -26,6 +26,11 @@ const workerSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    remark: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     isDeleted: {
       type: Boolean,
       default: false,

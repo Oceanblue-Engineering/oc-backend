@@ -3,6 +3,7 @@ import Project from "../models/project.model.js";
 import Expense from "../models/expense.model.js";
 import Attendance from "../models/attendance.model.js";
 import Worker from "../models/worker.model.js";
+import Invoice from "../models/invoice.model.js";
 import asyncErrorHandler from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
 import { createDateFilter } from "../utils/dateFilter.utils.js";
@@ -287,13 +288,33 @@ export const getProjectFinancialSummary = asyncErrorHandler(async (req, res, nex
   // Calculate financial metrics
   const totalCost = totalExpenses + totalPayroll;
 
-  // For now, use a simple estimation formula (could be enhanced with project-specific revenue data)
-  // estimatedRevenue = totalCost * 1.25 (25% profit margin as default)
-  const estimatedRevenue = Math.round(totalCost * 1.25);
-  const estimatedProfit = estimatedRevenue - totalCost;
-  const profitMargin = totalCost > 0
-    ? Math.round((estimatedProfit / totalCost) * 100)
-    : 0;
+  // Method (A): Get invoices & receipts linked to this project (excluding softDeleted & cancelled)
+  const projectInvoices = await Invoice.find({
+    projectId: id,
+    softDeleted: false,
+    status: { $ne: "cancelled" },
+  });
+
+  const totalInvoiced = projectInvoices.reduce(
+    (sum, inv) => sum + (Number(inv.totalAmount) || 0),
+    0
+  );
+  const totalPaid = projectInvoices
+    .filter((inv) => inv.status === "paid")
+    .reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
+
+  // If project has issued/paid invoices, use total invoiced value as revenue.
+  // If no invoices exist yet, fallback to 25% markup estimation (totalCost * 1.25).
+  const hasInvoices = projectInvoices.length > 0 && totalInvoiced > 0;
+  const estimatedRevenue = hasInvoices
+    ? totalInvoiced
+    : Math.round(totalCost * 1.25);
+
+  const netProfit = estimatedRevenue - totalCost;
+  const estimatedProfit = netProfit;
+  const profitMargin = estimatedRevenue > 0
+    ? Math.round((netProfit / estimatedRevenue) * 100)
+    : (totalCost > 0 ? Math.round((netProfit / totalCost) * 100) : 0);
 
   res.status(200).json({
     success: true,
@@ -314,8 +335,14 @@ export const getProjectFinancialSummary = asyncErrorHandler(async (req, res, nex
         totalPayroll,
         totalCost,
         estimatedRevenue,
-        estimatedProfit,
+        revenue: estimatedRevenue,
+        netProfit,
+        estimatedProfit: netProfit,
         profitMargin,
+        totalInvoiced,
+        totalPaid,
+        hasInvoices,
+        invoiceCount: projectInvoices.length,
         expenseCount: expenses.length,
         attendanceCount: attendanceRecords.length,
       },

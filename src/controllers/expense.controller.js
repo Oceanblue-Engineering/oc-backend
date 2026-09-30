@@ -1,6 +1,7 @@
 import { asyncErrorHandler } from "../utils/asyncErrorHandler.js";
 import CustomError from "../utils/customError.js";
 import Expense from "../models/expense.model.js";
+import LocationProfile from "../models/locationProfile.model.js";
 import mongoose from "mongoose";
 import { createDateFilter } from "../utils/dateFilter.utils.js";
 
@@ -16,11 +17,19 @@ export const createExpense = asyncErrorHandler(async (req, res, next) => {
 
   // Use locationId from user if available, otherwise use from request body
   // This allows owners and admins (who might not have locationId) to create expenses
-  const locationId = req.user.locationId || bodyLocationId;
+  let locationId = req.user.locationId || bodyLocationId;
   const adminId = req.user._id;
 
-  // Validate that locationId is provided
-  if (!locationId) {
+  // If project expense and no locationId, auto-fallback to default location if available
+  if (!locationId && projectId) {
+    const defaultLoc = await LocationProfile.findOne({ isDeleted: false });
+    if (defaultLoc) {
+      locationId = defaultLoc._id;
+    }
+  }
+
+  // Validate that locationId is provided for general (non-project) expenses
+  if (!locationId && !projectId) {
     return next(
       new CustomError(
         400,
@@ -29,7 +38,7 @@ export const createExpense = asyncErrorHandler(async (req, res, next) => {
     );
   }
 
-  if (!mongoose.Types.ObjectId.isValid(locationId)) {
+  if (locationId && !mongoose.Types.ObjectId.isValid(locationId)) {
     return next(new CustomError(400, "Invalid location ID format"));
   }
   if (!mongoose.Types.ObjectId.isValid(adminId)) {

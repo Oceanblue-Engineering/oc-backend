@@ -22,7 +22,13 @@ const expenseSchema = new mongoose.Schema(
     locationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "LocationProfile",
-      required: [true, "Location is required"],
+      required: [
+        function () {
+          return !this.projectId;
+        },
+        "Location is required",
+      ],
+      default: null,
     },
     adminId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -51,6 +51,7 @@ import activityLogRouter from "./routes/activityLog.route.js";
 import personalExpenseRouter from "./routes/personalExpense.route.js";
 import toolInventoryRouter from "./routes/toolInventory.route.js";
 import projectToolAllocationRouter from "./routes/projectToolAllocation.route.js";
+import projectTaskRouter from "./routes/projectTask.route.js";
 import { activityLoggerMiddleware } from "./middlewares/activityLogger.middleware.js";
 import { getTelegramBot } from "./services/telegram.service.js";
 const app = express();
@@ -109,6 +110,7 @@ app.use("/api/v1", activityLogRouter);
 app.use("/api/v1", personalExpenseRouter);
 app.use("/api/v1", toolInventoryRouter);
 app.use("/api/v1", projectToolAllocationRouter);
+app.use("/api/v1", projectTaskRouter);
 // Telegram webhook (public)
 app.post("/webhook/telegram", (req, res) => {
   const bot = getTelegramBot();

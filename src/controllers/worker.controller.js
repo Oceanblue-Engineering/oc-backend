@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 
 // CREATE Worker
 export const createWorker = asyncErrorHandler(async (req, res, next) => {
-  const { name, phone, position, dailyRate, telegramId } = req.body;
+  const { name, phone, position, dailyRate, telegramId, remark } = req.body;
 
   if (!name) {
     return next(new CustomError(400, "Name is required"));
@@ -17,6 +17,7 @@ export const createWorker = asyncErrorHandler(async (req, res, next) => {
     position,
     dailyRate,
     telegramId,
+    remark: remark ? remark.trim() : "",
   });
 
   res.status(201).json({
