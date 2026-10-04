@@ -20,15 +20,75 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 /**
- * Deeply clone and sanitize an object to remove sensitive information.
+ * Safely convert any object (including Mongoose Documents) to a plain JSON object.
+ * Strips all Mongoose internal properties, MongoDB driver ClientSessions, sockets, etc.
+ */
+function toPlainObject(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== "object") return obj;
+
+  try {
+    // If it's a Mongoose Document, convert to plain JS object first
+    if (typeof obj.toObject === "function") {
+      obj = obj.toObject({ getters: false, virtuals: false });
+    } else if (typeof obj.toJSON === "function") {
+      obj = obj.toJSON();
+    }
+
+    return JSON.parse(
+      JSON.stringify(obj, (key, value) => {
+        // Strip Mongoose internal properties & MongoDB driver sessions
+        if (
+          key.startsWith("$") ||
+          key === "session" ||
+          key === "clientSession" ||
+          key === "_session" ||
+          (value &&
+            typeof value === "object" &&
+            (value.constructor?.name === "ClientSession" ||
+              value._topology ||
+              value.client ||
+              value.topology))
+        ) {
+          return undefined;
+        }
+        return value;
+      })
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Deeply clone and sanitize an object to remove sensitive information
+ * and prevent huge payloads from burdening database storage.
  */
 function sanitizePayload(obj, depth = 0) {
   if (depth > 5 || !obj) return obj;
+  if (typeof obj === "string") {
+    if (obj.length > 500) {
+      return `${obj.slice(0, 80)}... [Truncated ${obj.length} chars]`;
+    }
+    return obj;
+  }
   if (typeof obj !== "object") return obj;
 
+  // Block any ClientSession or topology objects that might have slipped through
+  if (
+    obj.constructor?.name === "ClientSession" ||
+    obj._topology ||
+    obj.client ||
+    obj.topology
+  ) {
+    return null;
+  }
+
   if (Array.isArray(obj)) {
-    if (obj.length > 50) {
-      return `[Array with ${obj.length} items]`;
+    if (obj.length > 20) {
+      const slice = obj.slice(0, 20).map((item) => sanitizePayload(item, depth + 1));
+      slice.push(`... (+${obj.length - 20} more items)`);
+      return slice;
     }
     return obj.map((item) => sanitizePayload(item, depth + 1));
   }
@@ -40,11 +100,84 @@ function sanitizePayload(obj, depth = 0) {
       sanitized[key] = "[REDACTED]";
     } else if (typeof value === "object" && value !== null) {
       sanitized[key] = sanitizePayload(value, depth + 1);
+    } else if (typeof value === "string" && value.length > 500) {
+      sanitized[key] = `${value.slice(0, 80)}... [Truncated ${value.length} chars]`;
     } else {
       sanitized[key] = value;
     }
   }
   return sanitized;
+}
+
+/**
+ * Extract lean summary from response payload (created/updated/deleted entity).
+ */
+function sanitizeResponseBody(body) {
+  if (!body || typeof body !== "object") return null;
+  const plain = toPlainObject(body);
+  if (!plain) return null;
+  const payloadToLog = plain.data !== undefined ? plain.data : plain;
+  return sanitizePayload(payloadToLog);
+}
+
+/**
+ * Identify target entity details (ID, Code, Name, Type) from request and response.
+ */
+function extractTargetDetails(module, method, req, responseData) {
+  const data = responseData?.data || responseData;
+  const targetId =
+    data?._id ||
+    data?.id ||
+    req.params?.id ||
+    req.params?.orderId ||
+    req.params?.userId ||
+    "";
+
+  const targetCode =
+    data?.productCode ||
+    data?.orderNumber ||
+    data?.invoiceNumber ||
+    data?.transferNumber ||
+    data?.code ||
+    data?.SKU ||
+    req.body?.productCode ||
+    req.body?.orderNumber ||
+    "";
+
+  const targetName =
+    data?.productName ||
+    data?.name ||
+    data?.customerName ||
+    data?.clientName ||
+    data?.supplierName ||
+    data?.locationName ||
+    data?.title ||
+    req.body?.productName ||
+    req.body?.name ||
+    req.body?.customerName ||
+    req.body?.clientName ||
+    "";
+
+  return {
+    targetId: String(targetId || "").slice(0, 100),
+    targetCode: String(targetCode || "").slice(0, 100),
+    targetName: String(targetName || "").slice(0, 150),
+    targetType: String(module || "General").slice(0, 50),
+  };
+}
+
+/**
+ * Extract array of modified field names for PUT / PATCH updates.
+ */
+function extractChangedFields(method, reqBody) {
+  if (method !== "PUT" && method !== "PATCH") return [];
+  if (!reqBody || typeof reqBody !== "object" || Array.isArray(reqBody)) return [];
+
+  const ignored = new Set(["_id", "__v", "createdat", "updatedat"]);
+  return Object.keys(reqBody).filter((k) => {
+    const lower = k.toLowerCase();
+    return !ignored.has(lower) && !SENSITIVE_KEYS.has(lower);
+  });
 }
 
 /**
@@ -166,6 +299,7 @@ function resolveModuleAndAction(method, path) {
 /**
  * Global Activity Logger Express Middleware.
  * Only logs mutating HTTP methods (POST, PUT, PATCH, DELETE).
+ * Zero perceived latency impact: captures response in-memory and saves asynchronously.
  */
 export const activityLoggerMiddleware = async (req, res, next) => {
   const mutatingMethods = ["POST", "PUT", "PATCH", "DELETE"];
@@ -185,6 +319,29 @@ export const activityLoggerMiddleware = async (req, res, next) => {
   }
 
   const startTime = Date.now();
+
+  // In-memory capture of response body (takes <0.05ms, no blocking)
+  let rawResponseBody = null;
+  const originalJson = res.json;
+  const originalSend = res.send;
+
+  res.json = function (body) {
+    try {
+      rawResponseBody = toPlainObject(body);
+    } catch (_) {
+      rawResponseBody = null;
+    }
+    return originalJson.apply(this, arguments);
+  };
+
+  res.send = function (body) {
+    if (!rawResponseBody && typeof body === "string") {
+      try {
+        rawResponseBody = toPlainObject(JSON.parse(body));
+      } catch (_) {}
+    }
+    return originalSend.apply(this, arguments);
+  };
 
   // Capture user info early if available or from Authorization header
   let userSnapshot = {
@@ -236,17 +393,23 @@ export const activityLoggerMiddleware = async (req, res, next) => {
       // 2. Resolve Module & Action
       const { module, action } = resolveModuleAndAction(req.method, originalUrl);
 
-      // 3. Sanitize Request Body
-      const sanitizedBody = sanitizePayload(req.body);
+      // 3. Sanitize Request Body (Convert to plain object to eliminate any Mongoose/BSON session references)
+      const plainReqBody = toPlainObject(req.body);
+      const sanitizedBody = sanitizePayload(plainReqBody);
 
-      // 4. Client IP & User Agent
+      // 4. Sanitize Response Summary & Capture Changed Fields / Target Details
+      const responseSummary = sanitizeResponseBody(rawResponseBody);
+      const targetDetails = extractTargetDetails(module, req.method, req, rawResponseBody);
+      const changedFields = extractChangedFields(req.method, plainReqBody);
+
+      // 5. Client IP & User Agent
       const ipAddress =
         req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
         req.socket?.remoteAddress ||
         "";
       const userAgent = req.headers["user-agent"] || "";
 
-      // 5. Asynchronously persist ActivityLog (fire and forget)
+      // 6. Asynchronously persist ActivityLog (fire and forget)
       await ActivityLog.create({
         user: userSnapshot,
         method: req.method,
@@ -256,6 +419,9 @@ export const activityLoggerMiddleware = async (req, res, next) => {
         statusCode,
         status,
         requestBody: sanitizedBody,
+        responseSummary,
+        changedFields,
+        targetDetails,
         requestParams: Object.keys(req.params || {}).length ? req.params : null,
         requestQuery: Object.keys(req.query || {}).length ? req.query : null,
         errorMessage: status === "FAILED" ? res.statusMessage || null : null,

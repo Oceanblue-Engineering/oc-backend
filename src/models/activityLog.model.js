@@ -69,6 +69,36 @@ const activityLogSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    responseSummary: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    changedFields: {
+      type: [String],
+      default: [],
+    },
+    targetDetails: {
+      targetId: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      targetCode: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      targetName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      targetType: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+    },
     ipAddress: {
       type: String,
       default: "",
@@ -93,6 +123,9 @@ activityLogSchema.index({ module: 1, createdAt: -1 });
 activityLogSchema.index({ "user._id": 1, createdAt: -1 });
 activityLogSchema.index({ method: 1, createdAt: -1 });
 activityLogSchema.index({ status: 1, createdAt: -1 });
+activityLogSchema.index({ "targetDetails.targetId": 1, createdAt: -1 });
+activityLogSchema.index({ "targetDetails.targetName": 1, createdAt: -1 });
+activityLogSchema.index({ "targetDetails.targetCode": 1, createdAt: -1 });
 
 const ActivityLog = mongoose.model("ActivityLog", activityLogSchema);
 

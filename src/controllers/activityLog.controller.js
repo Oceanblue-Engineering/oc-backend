@@ -51,7 +51,7 @@ export const getActivityLogs = asyncErrorHandler(async (req, res, next) => {
     }
   }
 
-  // Search keyword (matches action, endpoint, user name, user email)
+  // Search keyword (matches action, endpoint, user name, user email, target name/code)
   if (search && search.trim()) {
     const term = search.trim();
     query.$or = [
@@ -60,6 +60,8 @@ export const getActivityLogs = asyncErrorHandler(async (req, res, next) => {
       { "user.name": { $regex: term, $options: "i" } },
       { "user.email": { $regex: term, $options: "i" } },
       { module: { $regex: term, $options: "i" } },
+      { "targetDetails.targetName": { $regex: term, $options: "i" } },
+      { "targetDetails.targetCode": { $regex: term, $options: "i" } },
     ];
   }
 
