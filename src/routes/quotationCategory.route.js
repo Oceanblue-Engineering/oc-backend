@@ -15,12 +15,12 @@ router
   .route("/quotation-categories")
   .get(
     protect,
-    permissionGranted("cashier", "admin", "owner", "store-manager"),
+    permissionGranted("cashier", "admin", "owner", "manager", "store-manager"),
     getQuotationCategories
   )
   .post(
     protect,
-    permissionGranted("admin", "owner", "store-manager"),
+    permissionGranted("admin", "owner", "manager", "store-manager"),
     createQuotationCategory
   );
 
@@ -28,7 +28,7 @@ router
   .route("/quotation-categories/:id")
   .delete(
     protect,
-    permissionGranted("admin", "owner"),
+    permissionGranted("admin", "owner", "manager"),
     deleteQuotationCategory
   );
 

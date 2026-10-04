@@ -24,7 +24,7 @@ const adminSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["owner", "admin", "cashier", "worker"],
+    enum: ["owner", "admin", "manager", "cashier", "worker"],
     required: [true, "Role is required"],
   },
   telegramChatId: {

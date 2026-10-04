@@ -26,6 +26,7 @@ export const protect = asyncErrorHandler(async (req, res, next) => {
   if (
     role === "owner" ||
     role === "admin" ||
+    role === "manager" ||
     role === "cashier" ||
     role === "worker" ||
     role === "kitchen" ||

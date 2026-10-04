@@ -16,15 +16,15 @@ const router = express.Router();
 
 // ─── Promotion Routes ──────────────────────────────────────────
 
-router.post("/lucky-draw/promotions", protect, permissionGranted("owner"), createPromotion);
-router.get("/lucky-draw/promotions", protect, permissionGranted("owner", "admin", "cashier"), getPromotions);
-router.get("/lucky-draw/promotions/:id", protect, permissionGranted("owner", "admin", "cashier"), getPromotion);
-router.patch("/lucky-draw/promotions/:id", protect, permissionGranted("owner"), updatePromotion);
-router.delete("/lucky-draw/promotions/:id", protect, permissionGranted("owner"), deletePromotion);
+router.post("/lucky-draw/promotions", protect, permissionGranted("owner", "manager"), createPromotion);
+router.get("/lucky-draw/promotions", protect, permissionGranted("owner", "admin", "manager", "cashier"), getPromotions);
+router.get("/lucky-draw/promotions/:id", protect, permissionGranted("owner", "admin", "manager", "cashier"), getPromotion);
+router.patch("/lucky-draw/promotions/:id", protect, permissionGranted("owner", "manager"), updatePromotion);
+router.delete("/lucky-draw/promotions/:id", protect, permissionGranted("owner", "manager"), deletePromotion);
 
 // ─── Redemption Routes ─────────────────────────────────────────
 
-router.post("/lucky-draw/redemptions", protect, permissionGranted("cashier", "admin", "owner"), processRedemption);
-router.get("/lucky-draw/redemptions", protect, permissionGranted("owner", "admin", "cashier"), getRedemptions);
+router.post("/lucky-draw/redemptions", protect, permissionGranted("cashier", "admin", "manager", "owner"), processRedemption);
+router.get("/lucky-draw/redemptions", protect, permissionGranted("owner", "admin", "manager", "cashier"), getRedemptions);
 
 export default router;

@@ -12,7 +12,7 @@ import {
 } from "../controllers/administrationPolicy.controller.js";
 
 const projectToolAllocationRouter = express.Router();
-const ownerAdmin = permissionGranted("owner", "admin");
+const ownerAdmin = permissionGranted("owner", "admin", "manager");
 
 // Project-scoped allocation routes
 projectToolAllocationRouter.get(

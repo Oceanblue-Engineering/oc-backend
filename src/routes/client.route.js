@@ -15,37 +15,37 @@ const router = Router();
 router.post(
   "/clients",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   createClient
 );
 router.get(
   "/clients",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   getClients
 );
 router.get(
   "/clients/:id",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   getClientById
 );
 router.patch(
   "/clients/:id",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   updateClient
 );
 router.post(
   "/clients/:id/logs",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   addClientLog
 );
 router.patch(
   "/clients/:id/soft-delete",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   deleteClient
 );
 

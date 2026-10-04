@@ -21,25 +21,25 @@ import { permissionGranted } from "../controllers/administrationPolicy.controlle
 router.post(
   "/order",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   createOrder
 );
 router.get(
   "/order",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getAllOrders
 );
 router.get(
   "/order/:orderId",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getOrders
 );
 router.get(
   "/order/storefront/:storefrontId",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getOrdersByStorefrontId
 );
 
@@ -47,7 +47,7 @@ router.get(
 router.patch(
   "/order/:orderId/credit-person",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   updateOrderCreditPersonId
 );
 
@@ -55,7 +55,7 @@ router.patch(
 router.patch(
   "/order/:orderId/paid-amount",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   updateOrderPaidAmount
 );
 
@@ -63,7 +63,7 @@ router.patch(
 router.patch(
   "/order/:orderId/delivery-status",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   updateOrderDeliveryStatus
 );
 
@@ -71,7 +71,7 @@ router.patch(
 router.patch(
   "/order/:orderId/items/add",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   addOrderItems
 );
 
@@ -79,7 +79,7 @@ router.patch(
 router.patch(
   "/order/:orderId/items/remove",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   removeOrderItems
 );
 
@@ -87,11 +87,16 @@ router.patch(
 router.patch(
   "/order/:orderId",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   updateEntireOrder
 );
 
 // Hard delete order
-router.delete("/order/:orderId", hardDeleteOrder);
+router.delete(
+  "/order/:orderId",
+  protect,
+  permissionGranted("owner", "manager"),
+  hardDeleteOrder
+);
 
 export default router;

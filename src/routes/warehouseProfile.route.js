@@ -13,7 +13,7 @@ const router = express.Router();
 router.post(
   "/warehouse-profile",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   createWarehouseProfile
 );
 
@@ -21,7 +21,7 @@ router.post(
 router.get(
   "/warehouse-profile",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getAllWarehouseProfiles
 );
 
@@ -29,7 +29,7 @@ router.get(
 router.get(
   "/warehouse-profile/:id",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getWarehouseProfileById
 );
 
@@ -37,7 +37,7 @@ router.get(
 router.patch(
   "/warehouse-profile/:id",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   updateWarehouseProfile
 );
 

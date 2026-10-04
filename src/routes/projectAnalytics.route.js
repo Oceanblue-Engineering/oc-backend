@@ -16,7 +16,7 @@ const router = express.Router();
 router.get(
   "/projects/:id/expenses",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getProjectExpenses
 );
 
@@ -24,7 +24,7 @@ router.get(
 router.get(
   "/projects/:id/payroll-summary",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getProjectPayrollSummary
 );
 
@@ -32,7 +32,7 @@ router.get(
 router.get(
   "/projects/:id/financial-summary",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getProjectFinancialSummary
 );
 

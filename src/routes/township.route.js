@@ -13,25 +13,25 @@ const router = Router();
 router.get(
   "/townships",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getTownships
 );
 router.post(
   "/townships",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   createTownship
 );
 router.patch(
   "/townships/:id",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   updateTownship
 );
 router.delete(
   "/townships/:id",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   deleteTownship
 );
 

@@ -8,7 +8,7 @@ import {
 } from "../controllers/administrationPolicy.controller.js";
 
 const toolInventoryRouter = express.Router();
-const ownerAdmin = permissionGranted("owner", "admin");
+const ownerAdmin = permissionGranted("owner", "admin", "manager");
 
 toolInventoryRouter.post("/tools", protect, ownerAdmin, createTool);
 toolInventoryRouter.get("/tools/search", protect, ownerAdmin, searchTools);

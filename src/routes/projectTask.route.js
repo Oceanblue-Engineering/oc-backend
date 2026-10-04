@@ -13,7 +13,7 @@ const router = express.Router();
 router.get(
   "/projects/:projectId/tasks",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getProjectTasks
 );
 
@@ -21,7 +21,7 @@ router.get(
 router.post(
   "/projects/:projectId/tasks",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   createProjectTask
 );
 
@@ -29,7 +29,7 @@ router.post(
 router.put(
   "/projects/tasks/:taskId",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   updateProjectTask
 );
 
@@ -37,7 +37,7 @@ router.put(
 router.delete(
   "/projects/tasks/:taskId",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   deleteProjectTask
 );
 

@@ -18,43 +18,43 @@ const router = express.Router();
 router.post(
   "/expense",
   protect,
-  permissionGranted("cashier", "admin", "owner"),
+  permissionGranted("cashier", "admin", "manager", "owner"),
   createExpense
 );
 router.get(
   "/expense",
   protect,
-  permissionGranted("cashier", "admin", "owner"),
+  permissionGranted("cashier", "admin", "manager", "owner"),
   getExpenses
 );
 router.get(
   "/expense/:id",
   protect,
-  permissionGranted("cashier", "admin", "owner"),
+  permissionGranted("cashier", "admin", "manager", "owner"),
   getExpenseById
 );
 router.patch(
   "/expense/:id",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   updateExpense
 );
 router.patch(
   "/expense/:id/soft-delete",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   softDeleteExpense
 );
 router.patch(
   "/expense/:id/restore",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   restoreExpense
 );
 router.delete(
   "/expense/:id",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   deleteExpense
 );
 export default router;

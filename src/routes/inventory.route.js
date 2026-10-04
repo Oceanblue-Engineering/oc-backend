@@ -41,7 +41,7 @@ const upload = multer({
 router.post(
   "/inventory/import-excel",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   upload.single("file"),
   importInventoryFromExcel,
 );
@@ -50,7 +50,7 @@ router.post(
 router.post(
   "/inventory/bulk-link-suppliers",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   bulkLinkSuppliers,
 );
 
@@ -58,7 +58,7 @@ router.post(
 router.post(
   "/inventory/bulk-unlink-suppliers",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   bulkUnlinkSuppliers,
 );
 
@@ -66,7 +66,7 @@ router.post(
 router.get(
   "/inventory/categories",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getAllCategories,
 );
 
@@ -74,7 +74,7 @@ router.get(
 router.post(
   "/inventory",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   createInventory,
 );
 
@@ -82,7 +82,7 @@ router.post(
 router.get(
   "/inventory",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   getAllInventory,
 );
 
@@ -90,7 +90,7 @@ router.get(
 router.get(
   "/inventory/:id",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   getInventoryById,
 );
 
@@ -98,7 +98,7 @@ router.get(
 router.patch(
   "/inventory/:id",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   updateInventory,
 );
 

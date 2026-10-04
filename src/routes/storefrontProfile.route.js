@@ -13,7 +13,7 @@ const router = express.Router();
 router.post(
   "/storefront-profile",
   protect,
-  permissionGranted("owner", "admin"),
+  permissionGranted("owner", "admin", "manager"),
   createStorefrontProfile
 );
 
@@ -21,7 +21,7 @@ router.post(
 router.get(
   "/storefront-profile",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getAllStorefrontProfiles
 );
 
@@ -29,7 +29,7 @@ router.get(
 router.get(
   "/storefront-profile/:id",
   protect,
-  permissionGranted("owner", "admin", "cashier"),
+  permissionGranted("owner", "admin", "manager", "cashier"),
   getStorefrontProfileById
 );
 
@@ -37,7 +37,7 @@ router.get(
 router.patch(
   "/storefront-profile/:id",
   protect,
-  permissionGranted("owner"),
+  permissionGranted("owner", "manager"),
   updateStorefrontProfile
 );
 
