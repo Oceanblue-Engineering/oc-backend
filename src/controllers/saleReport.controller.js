@@ -75,12 +75,30 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
       {
         $group: {
           _id: null,
-          totalFinalAmount: { $sum: "$finalAmount" },
+          totalFinalAmount: {
+            $sum: {
+              $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$finalAmount", 0],
+            },
+          },
           totalPaidAmount: { $sum: "$paidAmount" },
-          totalSubTotal: { $sum: "$subTotal" },
-          totalTax: { $sum: "$tax" },
-          totalDiscount: { $sum: "$discount" },
-          totalExtraChange: { $sum: "$extraChange" },
+          totalSubTotal: {
+            $sum: {
+              $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$subTotal", 0],
+            },
+          },
+          totalTax: {
+            $sum: { $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$tax", 0] },
+          },
+          totalDiscount: {
+            $sum: {
+              $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$discount", 0],
+            },
+          },
+          totalExtraChange: {
+            $sum: {
+              $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$extraChange", 0],
+            },
+          },
           orderCount: { $sum: 1 },
           creditOrderCount: {
             $sum: { $cond: [{ $eq: ["$paymentType", "credit"] }, 1, 0] },
@@ -126,6 +144,34 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
               $cond: [{ $eq: ["$paymentMethod", "foc"] }, "$finalAmount", 0],
             },
           },
+          totalDeliveryFee: {
+            $sum: {
+              $cond: [
+                { $ne: ["$paymentMethod", "foc"] },
+                { $ifNull: ["$deliveryDetails.deliveryFee", 0] },
+                0,
+              ],
+            },
+          },
+          deliveryOrderCount: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ["$paymentMethod", "foc"] },
+                    {
+                      $gt: [
+                        { $ifNull: ["$deliveryDetails.deliveryFee", 0] },
+                        0,
+                      ],
+                    },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
         },
       },
     ]);
@@ -146,6 +192,8 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
       orderCount: 0,
       creditOrderCount: 0,
       paidOrderCount: 0,
+      totalDeliveryFee: 0,
+      deliveryOrderCount: 0,
     };
 
     // Get date range info - use parsed dates from filter if available, otherwise use query params
@@ -174,6 +222,8 @@ export const getSaleReportByStorefrontId = asyncErrorHandler(
           creditPaidAmount: report.totalCreditPaidAmount || 0,
           focAmount: report.totalFocAmount || 0,
           focOrderCount: report.focOrderCount || 0,
+          deliveryFee: report.totalDeliveryFee || 0,
+          deliveryOrderCount: report.deliveryOrderCount || 0,
           subTotal: report.totalSubTotal,
           tax: report.totalTax,
           discount: report.totalDiscount,
@@ -213,11 +263,12 @@ export const getPaymentMethodReportByStorefrontId = asyncErrorHandler(
       }
     }
 
-    // Build query filter - only paid orders
+    // Build query filter - only paid orders (exclude FOC orders)
     const filter = {
       isDeleted: false,
       orderStatus: "completed", // Only include completed orders
       paymentType: "paid", // Only paid orders
+      paymentMethod: { $ne: "foc" }, // Exclude FOC orders from payment method breakdown
     };
 
     // Add storefrontId filter only if provided

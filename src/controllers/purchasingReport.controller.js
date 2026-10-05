@@ -201,10 +201,10 @@ export const getPurchasingReport = asyncErrorHandler(async (req, res, next) => {
   };
 
   const expenseFilter = {
-    isDeleted: false,
+    softDeleted: false,
   };
   if (dateQuery.createdAt) {
-    expenseFilter.createdAt = dateQuery.createdAt;
+    expenseFilter.date = dateQuery.createdAt;
   }
 
   const expenseAgg = await Expense.aggregate([

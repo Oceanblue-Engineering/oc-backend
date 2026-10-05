@@ -52,16 +52,43 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
     {
       $group: {
         _id: null,
-        totalFinalAmount: { $sum: "$finalAmount" },
+        totalFinalAmount: {
+          $sum: {
+            $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$finalAmount", 0],
+          },
+        },
         totalPaidAmount: { $sum: "$paidAmount" },
-        totalDiscount: { $sum: "$discount" },
+        totalDiscount: {
+          $sum: {
+            $cond: [{ $ne: ["$paymentMethod", "foc"] }, "$discount", 0],
+          },
+        },
         totalExtraChange: { $sum: "$extraChange" },
         orderCount: { $sum: 1 },
         creditOrderCount: {
           $sum: { $cond: [{ $eq: ["$paymentType", "credit"] }, 1, 0] },
         },
         paidOrderCount: {
-          $sum: { $cond: [{ $eq: ["$paymentType", "paid"] }, 1, 0] },
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$paymentType", "paid"] },
+                  { $ne: ["$paymentMethod", "foc"] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+        },
+        focOrderCount: {
+          $sum: { $cond: [{ $eq: ["$paymentMethod", "foc"] }, 1, 0] },
+        },
+        totalFocAmount: {
+          $sum: {
+            $cond: [{ $eq: ["$paymentMethod", "foc"] }, "$finalAmount", 0],
+          },
         },
         totalCreditAmount: {
           $sum: { $cond: [{ $eq: ["$paymentType", "credit"] }, "$finalAmount", 0] },
@@ -75,6 +102,29 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
             ],
           },
         },
+        totalDeliveryFee: {
+          $sum: {
+            $cond: [
+              { $ne: ["$paymentMethod", "foc"] },
+              { $ifNull: ["$deliveryDetails.deliveryFee", 0] },
+              0,
+            ],
+          },
+        },
+        deliveryOrderCount: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $ne: ["$paymentMethod", "foc"] },
+                  { $gt: [{ $ifNull: ["$deliveryDetails.deliveryFee", 0] }, 0] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+        },
       },
     },
   ]);
@@ -83,7 +133,9 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
     totalFinalAmount: 0, totalPaidAmount: 0,
     totalDiscount: 0, totalExtraChange: 0,
     orderCount: 0, creditOrderCount: 0, paidOrderCount: 0,
+    focOrderCount: 0, totalFocAmount: 0,
     totalCreditAmount: 0, totalOutstandingAmount: 0,
+    totalDeliveryFee: 0, deliveryOrderCount: 0,
   };
 
   return {
@@ -95,6 +147,9 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
       paidAmountFormatted: formatMyanmarCurrency(report.totalPaidAmount),
       outstandingAmount: report.totalOutstandingAmount || 0,
       outstandingAmountFormatted: formatMyanmarCurrency(report.totalOutstandingAmount || 0),
+      deliveryFee: report.totalDeliveryFee || 0,
+      deliveryFeeFormatted: formatMyanmarCurrency(report.totalDeliveryFee || 0),
+      deliveryOrderCount: report.deliveryOrderCount || 0,
       discount: report.totalDiscount,
       discountFormatted: formatMyanmarCurrency(report.totalDiscount),
       extraChange: report.totalExtraChange,
@@ -102,6 +157,9 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
       orderCount: report.orderCount,
       creditOrderCount: report.creditOrderCount,
       paidOrderCount: report.paidOrderCount,
+      focAmount: report.totalFocAmount || 0,
+      focAmountFormatted: formatMyanmarCurrency(report.totalFocAmount || 0),
+      focOrderCount: report.focOrderCount || 0,
       creditAmount: report.totalCreditAmount,
       creditAmountFormatted: formatMyanmarCurrency(report.totalCreditAmount),
     },
@@ -110,7 +168,7 @@ export async function getSaleReportSummary(storefrontId, startDate, endDate) {
 
 export async function getPaymentMethodReport(storefrontId, startDate, endDate) {
   const filter = buildBaseFilter(storefrontId, startDate, endDate);
-  const paidFilter = { ...filter, paymentType: "paid" };
+  const paidFilter = { ...filter, paymentType: "paid", paymentMethod: { $ne: "foc" } };
 
   const paymentMethodReport = await Order.aggregate([
     { $match: paidFilter },

@@ -33,7 +33,7 @@ export const createProject = asyncErrorHandler(async (req, res, next) => {
 
 // READ ALL Projects
 export const getProjects = asyncErrorHandler(async (req, res, next) => {
-  const { status, search, page = 1, limit = 20 } = req.query;
+  const { status, search, page, limit } = req.query;
 
   const filter = { isDeleted: false };
 
@@ -45,12 +45,20 @@ export const getProjects = asyncErrorHandler(async (req, res, next) => {
     filter.$or = [{ siteName: regex }, { customer: regex }, { description: regex }];
   }
 
-  const skip = (Number(page) - 1) * Number(limit);
+  // Determine pagination: if limit is '0' or 'all' or omitted without page, fetch all
+  const hasExplicitLimit = limit !== undefined && limit !== null && limit !== "0" && limit !== "all";
+  const shouldPaginate = hasExplicitLimit || page !== undefined;
+  const limitNum = shouldPaginate ? Math.max(1, Number(limit) || 20) : 0;
+  const pageNum = Math.max(1, Number(page) || 1);
+  const skip = limitNum > 0 ? (pageNum - 1) * limitNum : 0;
+
+  let queryChain = Project.find(filter).sort({ updatedAt: -1 });
+  if (limitNum > 0) {
+    queryChain = queryChain.skip(skip).limit(limitNum);
+  }
+
   const [projects, total] = await Promise.all([
-    Project.find(filter)
-      .skip(skip)
-      .limit(Number(limit))
-      .sort({ updatedAt: -1 }),
+    queryChain,
     Project.countDocuments(filter),
   ]);
 
@@ -59,10 +67,10 @@ export const getProjects = asyncErrorHandler(async (req, res, next) => {
     message: "Projects fetched successfully",
     data: { clients: projects }, // Maintain similar enveloped name 'clients' to make it easy for table listings or rename as projects
     pagination: {
-      currentPage: Number(page),
-      totalPages: Math.ceil(total / Number(limit)),
+      currentPage: pageNum,
+      totalPages: limitNum > 0 ? Math.ceil(total / limitNum) : 1,
       totalItems: total,
-      itemsPerPage: Number(limit),
+      itemsPerPage: limitNum > 0 ? limitNum : total,
     },
   });
 });
