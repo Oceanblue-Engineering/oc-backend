@@ -30,17 +30,15 @@ export const createSupplierProfile = asyncErrorHandler(
 export const getAllSupplierProfiles = asyncErrorHandler(
   async (req, res, next) => {
     const {
-      page = 1,
-      limit = 10,
+      page,
+      limit,
       search,
       sortBy = "createdAt",
       sortOrder = "desc",
       includeDeleted = false,
       isDeleted,
     } = req.query;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+
     const sort = {};
     sort[sortBy] = sortOrder === "asc" ? 1 : -1;
     let query = {};
@@ -55,23 +53,53 @@ export const getAllSupplierProfiles = asyncErrorHandler(
     }
     // If includeDeleted is true and isDeleted is not provided, don't filter by isDeleted (show all)
 
-    if (search) {
-      query.supplierName = { $regex: search, $options: "i" };
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), "i");
+      query.$or = [
+        { supplierName: searchRegex },
+        { contactNumber: searchRegex },
+        { township: searchRegex },
+        { address: searchRegex },
+      ];
     }
-    let suppliers = await SupplierProfile.find(query)
-      .sort(sort)
-      .skip(skip)
-      .limit(limitNum);
-    let total = await SupplierProfile.countDocuments(query);
+
+    let supplierQuery = SupplierProfile.find(query).sort(sort);
+
+    // Only apply pagination if limit is explicitly provided and not 'all' or '0'
+    const shouldPaginate =
+      limit !== undefined &&
+      limit !== null &&
+      limit !== "all" &&
+      limit !== "0" &&
+      !isNaN(parseInt(limit));
+
+    if (shouldPaginate) {
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+      supplierQuery = supplierQuery.skip(skip).limit(limitNum);
+    }
+
+    const suppliers = await supplierQuery;
+    const total = await SupplierProfile.countDocuments(query);
+
     res.status(200).json({
       success: true,
       message: "Supplier profiles retrieved successfully",
       data: suppliers,
       pagination: {
-        currentPage: pageNum,
-        totalPages: Math.ceil(total / limitNum),
         totalItems: total,
-        itemsPerPage: limitNum,
+        ...(shouldPaginate
+          ? {
+              currentPage: parseInt(page) || 1,
+              totalPages: Math.ceil(total / parseInt(limit)),
+              itemsPerPage: parseInt(limit),
+            }
+          : {
+              currentPage: 1,
+              totalPages: 1,
+              itemsPerPage: total,
+            }),
       },
     });
   }
